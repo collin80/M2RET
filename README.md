@@ -11,6 +11,7 @@ You will need the following to have any hope of compiling and running the firmwa
 
 - [Arduino IDE](https://www.arduino.cc/en/Main/Software) 1.5.4 or higher (tested all of the way up to 1.6.12)
 - [due_can](https://github.com/collin80/due_can) - Object oriented canbus library for Arduino Due compatible boards.
+- [due_wire](https://github.com/collin80/due_wire) - An alternative I2C library for Due with DMA support.
 - All of the M2 support libraries at https://github.com/macchina/m2-libraries
 
 All libraries belong in %USERPROFILE%\Documents\Arduino\libraries (Windows) or ~/Arduino/libraries (Linux/Mac).
