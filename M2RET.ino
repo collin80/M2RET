@@ -1,10 +1,10 @@
 /*
- GEV-RET.ino
+ M2RET.ino
 
- Created: 7/2/2014 10:10:14 PM
+ Created: March 4, 2017
  Author: Collin Kidder
 
-Copyright (c) 2014-2015 Collin Kidder, Michael Neuweiler, Charles Galpin
+Copyright (c) 2014-2017 Collin Kidder, Michael Neuweiler, Charles Galpin
 
 Permission is hereby granted, free of charge, to any person obtaining
 a copy of this software and associated documentation files (the
@@ -27,7 +27,7 @@ SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
  */
 
-#include "GVRET.h"
+#include "M2RET.h"
 #include "config.h"
 #include <due_can.h>
 #include <SdFat.h>

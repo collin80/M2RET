@@ -29,7 +29,7 @@ SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
 #include "config.h"
 #include "sys_io.h"
-#include "GVRET.h"
+#include "M2RET.h"
 
 class SerialConsole {
 public:
