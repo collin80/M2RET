@@ -66,7 +66,7 @@ void SerialConsole::printMenu() {
     SerialUSB.println();
 
     Logger::console("LOGLEVEL=%i - set log level (0=debug, 1=info, 2=warn, 3=error, 4=off)", settings.logLevel);
-	Logger::console("SYSTYPE=%i - set board type (0=CANDue, 1=GEVCU, 2=CANDUE13, 3=MACCHINA_M2)", settings.sysType);
+	Logger::console("SYSTYPE=%i - set board type (0=Macchina M2)", settings.sysType);
 	SerialUSB.println();
 
 	Logger::console("CAN0EN=%i - Enable/Disable CAN0 (0 = Disable, 1 = Enable)", settings.CAN0_Enabled);
@@ -90,7 +90,6 @@ void SerialConsole::printMenu() {
 	Logger::console("CAN0SEND=ID,LEN,<BYTES SEPARATED BY COMMAS> - Ex: C0SEND=0x200,4,1,2,3,4");
 	Logger::console("CAN1SEND=ID,LEN,<BYTES SEPARATED BY COMMAS> - Ex: C1SEND=0x200,8,00,00,00,10,0xAA,0xBB,0xA0,00");
 	Logger::console("MARK=<Description of what you are doing> - Set a mark in the log file about what you are about to do.");
-	Logger::console("SINGLEWIRE=%i - Use single wire mode (0 = Normal Mode 1 = Single Wire Mode", settings.singleWireMode);
 	SerialUSB.println();
 
 	Logger::console("BINSERIAL=%i - Enable/Disable Binary Sending of CANBus Frames to Serial (0=Dis, 1=En)", settings.useBinarySerialComm);
@@ -286,14 +285,14 @@ void SerialConsole::handleConfigCmd() {
 		if (newValue > 1) newValue = 1;
 		Logger::console("Setting CAN0 Enabled to %i", newValue);
 		settings.CAN0_Enabled = newValue;
-		if (newValue == 1) Can0.begin(settings.CAN0Speed, SysSettings.CAN0EnablePin);
+		if (newValue == 1) Can0.begin(settings.CAN0Speed, 255);
 		else Can0.disable();
 		writeEEPROM = true;
 	} else if (cmdString == String("CAN1EN")) {
 		if (newValue < 0) newValue = 0;
 		if (newValue > 1) newValue = 1;
 		Logger::console("Setting CAN1 Enabled to %i", newValue);
-		if (newValue == 1) Can1.begin(settings.CAN1Speed, SysSettings.CAN1EnablePin);
+		if (newValue == 1) Can1.begin(settings.CAN1Speed, 255);
 		else Can1.disable();
 		settings.CAN1_Enabled = newValue;
 		writeEEPROM = true;
@@ -302,7 +301,7 @@ void SerialConsole::handleConfigCmd() {
 		{
 			Logger::console("Setting CAN0 Baud Rate to %i", newValue);
 			settings.CAN0Speed = newValue;
-			Can0.begin(settings.CAN0Speed, SysSettings.CAN0EnablePin);
+			Can0.begin(settings.CAN0Speed, 255);
 			writeEEPROM = true;
 		}
 		else Logger::console("Invalid baud rate! Enter a value 1 - 1000000");
@@ -311,7 +310,7 @@ void SerialConsole::handleConfigCmd() {
 		{
 			Logger::console("Setting CAN1 Baud Rate to %i", newValue);
 			settings.CAN1Speed = newValue;
-			Can1.begin(settings.CAN1Speed, SysSettings.CAN1EnablePin);
+			Can1.begin(settings.CAN1Speed, 255);
 			writeEEPROM = true;
 		}
 		else Logger::console("Invalid baud rate! Enter a value 1 - 1000000");
@@ -416,12 +415,6 @@ void SerialConsole::handleConfigCmd() {
 		}
 		if (!settings.useBinarySerialComm) Logger::console("Mark: %s", newString);
 
-	} else if (cmdString == String("SINGLEWIRE")) {
-		if (newValue < 0) newValue = 0;
-		if (newValue > 1) newValue = 1;
-		Logger::console("Setting Single Wire Mode to %i", newValue);
-		settings.singleWireMode = newValue;
-		writeEEPROM = true;
 	} else if (cmdString == String("BINSERIAL")) {
 		if (newValue < 0) newValue = 0;
 		if (newValue > 1) newValue = 1;
@@ -461,12 +454,12 @@ void SerialConsole::handleConfigCmd() {
 		writeEEPROM = true;
 	}
 	else if (cmdString == String("SYSTYPE")) {
-		if (newValue < 4 && newValue >= 0) {
+		if (newValue < 1 && newValue >= 0) {
 			settings.sysType = newValue;			
 			writeEEPROM = true;
 			Logger::console("System type updated. Power cycle to apply.");
 		}
-		else Logger::console("Invalid system type. Please enter a value between 0 and 3");
+		else Logger::console("Invalid system type. Please enter a value between 0 and 0. Yes, just 0");
     } else if (cmdString == String("DIGTOGEN")) {
         if (newValue >= 0 && newValue <= 1)
         {
@@ -622,9 +615,11 @@ void SerialConsole::handleShortCmd() {
 		Logger::console("Power cycle to reset to factory defaults");
 		break;
 	case 's': //start logging canbus to file
+        Logger::console("Starting logging to file.");
 		SysSettings.logToFile = true;
 		break;
 	case 'S': //stop logging canbus to file
+        Logger::console("Ceasing file logging.");
 		SysSettings.logToFile = false;
 		break;
 	case 'O': //LAWICEL open canbus port (first one only because LAWICEL has no concept of dual canbus
@@ -638,7 +633,7 @@ void SerialConsole::handleShortCmd() {
 		SerialUSB.write(13); //send CR to mean "ok"
 		break;
 	case 'L': //LAWICEL open canbus port in listen only mode
-		Can0.begin(settings.CAN0Speed, SysSettings.CAN1EnablePin); //this is NOT really listen only mode but it isn't supported yet so for now...
+		Can0.begin(settings.CAN0Speed, 255); //this is NOT really listen only mode but it isn't supported yet so for now...
 		Can0.enable();		
 		SerialUSB.write(13); //send CR to mean "ok"
 		SysSettings.lawicelMode = true;

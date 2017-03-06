@@ -28,7 +28,6 @@
 #define LOGGER_H_
 
 #include <Arduino.h>
-#include <SdFat.h>
 #include "config.h"
 
 
@@ -53,8 +52,6 @@ public:
 private:
     static LogLevel logLevel;
     static uint32_t lastLogTime;
-
-	static SdFile fileRef; //file we're logging to
 	static uint8_t filebuffer[BUF_SIZE]; //size of buffer for file output
 	static uint16_t fileBuffWritePtr;
 	static uint32_t lastWriteTime;

@@ -1,8 +1,7 @@
 /*
  * config.h
  *
- * Defines the components to be used in the GEVCU and allows the user to configure
- * static parameters.
+ * allows the user to configure static parameters.
  *
  * Note: Make sure with all pin defintions of your hardware that each pin number is
  *       only defined once.
@@ -55,8 +54,12 @@ struct EEPROMSettings { //Must stay under 256 - currently somewhere around 222
 	
 	uint32_t CAN0Speed;
 	uint32_t CAN1Speed;
+    uint32_t SWCANSpeed;
+    uint32_t LINSpeed;
 	boolean CAN0_Enabled;
 	boolean CAN1_Enabled;
+    boolean SWCAN_Enabled;
+    boolean LIN_Enabled;
 	FILTER CAN0Filters[8]; // filters for our 8 mailboxes - 10*8 = 80 bytes
 	FILTER CAN1Filters[8]; // filters for our 8 mailboxes - 10*8 = 80 bytes
 
@@ -70,11 +73,11 @@ struct EEPROMSettings { //Must stay under 256 - currently somewhere around 222
 	boolean autoStartLogging; //should logging start immediately on start up?
 
 	uint8_t logLevel; //Level of logging to output on serial line
-	uint8_t sysType; //0 = CANDUE, 1 = GEVCU, 2 = CANDue13, 3 = Macchina M2
+	uint8_t sysType; //Only M2 for now - Ignored until any hardware differences show up
 
 	uint16_t valid; //stores a validity token to make sure EEPROM is not corrupt
 
-	uint8_t singleWireMode; //anything other than 1 means normal mode. 1 means use single wire mode where we strobe the enable line to go into HV mode
+	boolean SWCANListenOnly;
 	boolean CAN0ListenOnly; //if true we don't allow any messing with the bus but rather just passively monitor.
 	boolean CAN1ListenOnly;
 };
@@ -108,14 +111,8 @@ struct DigitalCANToggleSettings //16 bytes
 
 struct SystemSettings 
 {
-	uint8_t eepromWPPin;
-	uint8_t CAN0EnablePin;
-	uint8_t CAN1EnablePin;
-	uint8_t SWCANMode0Pin;
-	uint8_t SWCANMode1Pin; 
 	boolean useSD; //should we attempt to use the SDCard? (No logging possible otherwise)
 	boolean logToFile; //are we currently supposed to be logging to file?
-	uint8_t SDCardSelPin;
 	boolean SDCardInserted;
 	uint8_t LED_CANTX;
 	uint8_t LED_CANRX;
@@ -136,7 +133,7 @@ extern DigitalCANToggleSettings digToggleSettings;
 //buffer size for SDCard - Sending canbus data to the card. Still allocated even for GEVCU but unused in that case
 //This is a large buffer but the sketch may as well use up a lot of RAM. It's there.
 //This value is picked up by the SD card library and not directly used in the GVRET code.
-#define	BUF_SIZE	8192 
+#define	BUF_SIZE	512
 
 //size to use for buffering writes to the USB bulk endpoint
 //This is, however, directly used.
@@ -147,27 +144,9 @@ extern DigitalCANToggleSettings digToggleSettings;
 #define SER_BUFF_FLUSH_INTERVAL	2000   
 
 #define CFG_BUILD_NUM	336
-#define CFG_VERSION "GVRET alpha 2017-03-02"
+#define CFG_VERSION "M2RET Alpha March 4 2017"
 #define EEPROM_ADDR     0
-#define EEPROM_VER		0x15
-
-#define CANDUE_EEPROM_WP_PIN	18
-#define CANDUE_CAN0_EN_PIN		50
-#define CANDUE_CAN1_EN_PIN		48
-#define CANDUE_USE_SD			1
-#define CANDUE_SDCARD_SEL		10
-#define CANDUE_SWCAN_MODE0		46
-#define CANDUE_SWCAN_MODE1		44
-
-#define GEVCU_EEPROM_WP_PIN		19
-#define GEVCU_CAN0_EN_PIN		255  //GEVCU has a different transceiver with no enable pin
-#define GEVCU_CAN1_EN_PIN		255
-#define GEVCU_USE_SD			0
-#define GEVCU_SDCARD_SEL		10
-#define GEVCU_SWCAN_MODE0		255
-#define GEVCU_SWCAN_MODE1		255
-
-#define BLINK_LED          73 //13 is L, 73 is TX, 72 is RX
+#define EEPROM_VER		0x17
 
 #define NUM_ANALOG	4
 #define NUM_DIGITAL	4
@@ -180,4 +159,3 @@ extern DigitalCANToggleSettings digToggleSettings;
 #define BLINK_SLOWNESS      32  
 
 #endif /* CONFIG_H_ */
-
