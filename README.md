@@ -1,24 +1,18 @@
-GEV-RET
+M2RET
 =======
 
-Generalized Electric Vehicle Reverse Engineering Tool
+Reverse Engineering Tool running on Macchina M2 Hardware
 
-A project turn the GEVCU hardware into a specialized reverse engineering tool.
-
-The project now builds in the Arduino IDE. So, use it to compile, send the firmware to the Arduino, and monitor serial. It all works very nicely.
+A fork of the GVRET project.
 
 #### Requirements:
 
 You will need the following to have any hope of compiling and running the firmware:
 
-- The [GEVCU](http://store.evtv.me/proddetail.php?prod=gevcu&cat=28) hardware (version 4 hardware or newer), CANDue (1.1 or 2.0), or EVTVDue
-- [Arduino IDE](https://www.arduino.cc/en/Main/Software) 1.5.4 or higher (tested all of the way up to 1.6.6)
+- [Arduino IDE](https://www.arduino.cc/en/Main/Software) 1.5.4 or higher (tested all of the way up to 1.6.12)
 - [due_can](https://github.com/collin80/due_can) - Object oriented canbus library for Arduino Due compatible boards.
 - [due_wire](https://github.com/collin80/due_wire) - An alternative I2C library for Due with DMA support.
-- [SdFat](https://github.com/collin80/SdFat) - Arduino FAT16/FAT32 Library.
-- [DueFlashStorage](https://github.com/collin80/DueFlashStorage) DueFlashStorage saves non-volatile data for Arduino Due.
-- [Wire_EEPROM](https://github.com/collin80/Wire_EEPROM) I2C based routines to support EEPROM on the Due.
-- [FirmwareReceiver](https://github.com/collin80/FirmwareReceiver) Interacts with due_can to allow for a remote unit to upgrade the current sketch.
+- All of the M2 support libraries at https://github.com/macchina/m2-libraries
 
 All libraries belong in %USERPROFILE%\Documents\Arduino\libraries (Windows) or ~/Arduino/libraries (Linux/Mac).
 You will need to remove -master or any other postfixes. Your library folders should be named as above.
@@ -29,7 +23,7 @@ The canbus is supposed to be terminated on both ends of the bus. This should not
 
 This software is MIT licensed:
 
-Copyright (c) 2014-2015 Collin Kidder, Michael Neuweiler, Charles Galpin
+Copyright (c) 2014-2017 Collin Kidder, Michael Neuweiler, Charles Galpin
 
 Permission is hereby granted, free of charge, to any person obtaining
 a copy of this software and associated documentation files (the
