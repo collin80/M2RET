@@ -7,17 +7,38 @@ A fork of the GVRET project.
 
 #### Requirements:
 
-You will need the following to have any hope of compiling and running the firmware:
+You will need the following to be able to compile the run this project:
 
 - [Arduino IDE](https://www.arduino.cc/en/Main/Software) 1.5.4 or higher (tested all of the way up to 1.6.12)
 - [due_can](https://github.com/collin80/due_can) - Object oriented canbus library for Arduino Due compatible boards.
 - [due_wire](https://github.com/collin80/due_wire) - An alternative I2C library for Due with DMA support.
-- All of the M2 support libraries at https://github.com/macchina/m2-libraries
+- [Arduino_Due_SD_HSCMI](https://github.com/collin80/Arduino_Due_SD_HSCMI) - SD card support library
+- [SD_HSCMI](https://github.com/collin80/SD_HSCMI) - Another SD support library
+- [LIN](https://github.com/collin80/LIN) - Support for the dual LIN ports on the M2
+- [SamNonDuePin](https://github.com/collin80/SamNonDuePin) - Allows access to pins not mapped on standard Arduino Due boards
+- [SW_CAN](https://github.com/collin80/SW_CAN) - Single wire CAN support for M2 board
+
+Note, the last five libraries are all copied from https://github.com/macchina/m2-libraries but have been modified. You will need the versions found above in order to compile the M2RET firmware yourself.
 
 All libraries belong in %USERPROFILE%\Documents\Arduino\libraries (Windows) or ~/Arduino/libraries (Linux/Mac).
 You will need to remove -master or any other postfixes. Your library folders should be named as above.
 
-The canbus is supposed to be terminated on both ends of the bus. This should not be a problem as this firmware will be used to reverse engineer existing buses.
+The canbus is supposed to be terminated on both ends of the bus. This should not be a problem as this firmware will be used to reverse engineer existing buses. However, do note that CAN buses should have a resistance from CAN_H to CAN_L of 60 ohms. This is affected by placing a 120 ohm resistor on both sides of the bus. If the bus resistance is not fairly close to 60 ohms then you may run into trouble.  
+
+#### The firmware is a work in progress. What works:
+- CAN0 and CAN1 are operational
+- EEPROM can be used to save settings between start ups
+- Text console is active (configuration and CAN capture display)
+- Can connect as a GVRET device with SavvyCAN
+- Able to automatically start up and log all traffic to sdCard. Not stable at high bus loads just yet.
+- LAWICEL support (very basic)
+- Blinken Lights!
+
+#### What does not work:
+- Either LIN bus
+- Single wire CAN
+- Anything you attach to the XBEE port
+- Any of the digital I/O pins on the 26 pin connector
 
 #### License:
 
