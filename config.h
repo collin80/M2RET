@@ -34,6 +34,36 @@ SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
 #include "due_can.h"
 
+//buffer size for SDCard - Sending canbus data to the card. Still allocated even for GEVCU but unused in that case
+//This is a large buffer but the sketch may as well use up a lot of RAM. It's there.
+//This value is picked up by the SD card library and not directly used in the GVRET code.
+#define BUF_SIZE    512
+
+//size to use for buffering writes to the USB bulk endpoint
+//This is, however, directly used.
+#define SER_BUFF_SIZE       4096
+
+//maximum number of microseconds between flushes to the USB port.
+//The host should be polling every 1ms or so and so this time should be a small multiple of that
+#define SER_BUFF_FLUSH_INTERVAL 2000
+
+#define CFG_BUILD_NUM   337
+#define CFG_VERSION "M2RET Alpha April 2 2017"
+#define EEPROM_ADDR     0
+#define EEPROM_VER      0x17
+
+#define NUM_ANALOG  4
+#define NUM_DIGITAL 4
+#define NUM_OUTPUT  8
+
+//Number of times a frame would have to be sent or received to actually toggle the LED
+//This number thus slows down the blinking quite a bit - Useful to make it easier to see
+//what is going on based on the LEDs.
+//Applies just to RX and TX leds
+#define BLINK_SLOWNESS      32
+
+#define NUM_BUSES   5   //number of buses possible on this hardware - CAN0, CAN1, SWCAN, LIN1, LIN2 currently
+
 struct FILTER {  //should be 10 bytes
     uint32_t id;
     uint32_t mask;
@@ -118,41 +148,15 @@ struct SystemSettings {
     boolean rxToggle;
     boolean logToggle;
     boolean lawicelMode;
+    boolean lawicellExtendedMode;
     boolean lawicelAutoPoll;
     boolean lawicelTimestamping;
     int lawicelPollCounter;
+    boolean lawicelBusReception[NUM_BUSES]; //does user want to see messages from this bus?
 };
 
 extern EEPROMSettings settings;
 extern SystemSettings SysSettings;
 extern DigitalCANToggleSettings digToggleSettings;
-
-//buffer size for SDCard - Sending canbus data to the card. Still allocated even for GEVCU but unused in that case
-//This is a large buffer but the sketch may as well use up a lot of RAM. It's there.
-//This value is picked up by the SD card library and not directly used in the GVRET code.
-#define	BUF_SIZE	512
-
-//size to use for buffering writes to the USB bulk endpoint
-//This is, however, directly used.
-#define SER_BUFF_SIZE		4096
-
-//maximum number of microseconds between flushes to the USB port.
-//The host should be polling every 1ms or so and so this time should be a small multiple of that
-#define SER_BUFF_FLUSH_INTERVAL	2000
-
-#define CFG_BUILD_NUM	336
-#define CFG_VERSION "M2RET Alpha March 4 2017"
-#define EEPROM_ADDR     0
-#define EEPROM_VER		0x17
-
-#define NUM_ANALOG	4
-#define NUM_DIGITAL	4
-#define NUM_OUTPUT	8
-
-//Number of times a frame would have to be sent or received to actually toggle the LED
-//This number thus slows down the blinking quite a bit - Useful to make it easier to see
-//what is going on based on the LEDs.
-//Applies just to RX and TX leds
-#define BLINK_SLOWNESS      32
 
 #endif /* CONFIG_H_ */

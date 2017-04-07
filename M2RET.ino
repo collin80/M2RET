@@ -36,6 +36,7 @@ SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 #include <SPI.h>
 #include <lin_stack.h>
 #include <sw_can.h>
+#include "ELM327_Emulator.h"
 
 #include "EEPROM.h"
 #include "SerialConsole.h"
@@ -71,6 +72,8 @@ FileStore FS;
 SWcan SWCAN(78);
 lin_stack LIN1(1, 0); // Sniffer
 lin_stack LIN2(2, 0); // Sniffer
+
+ELM327Emu elmEmulator;
 
 SerialConsole console;
 
@@ -167,7 +170,9 @@ void loadSettings()
         SysSettings.rxToggle = true;
         SysSettings.lawicelAutoPoll = false;
         SysSettings.lawicelMode = false;
+        SysSettings.lawicellExtendedMode = false;
         SysSettings.lawicelTimestamping = false;
+        for (int rx = 0; rx < NUM_BUSES; rx++) SysSettings.lawicelBusReception[rx] = true; //default to showing messages on RX 
         pinMode(12, OUTPUT);
         pinMode(5, OUTPUT);
         pinMode(11, OUTPUT);
@@ -226,6 +231,9 @@ void setSWCANWakeup()
 
 void setup()
 {
+    pinModeNonDue(18, OUTPUT);
+    digitalWriteNonDue(18, LOW);
+
     //delay(5000); //just for testing. Don't use in production
 
     Serial.begin(115200);
@@ -325,6 +333,8 @@ void setup()
     SysSettings.lawicelAutoPoll = false;
     SysSettings.lawicelTimestamping = false;
     SysSettings.lawicelPollCounter = 0;
+    
+    elmEmulator.setup();
 
     SerialUSB.print("Done with init\n");
 }
@@ -436,24 +446,37 @@ void sendFrameToUSB(CAN_FRAME &frame, int whichBus)
     uint32_t now = micros();
 
     if (SysSettings.lawicelMode) {
-        if (frame.extended) {
-            SerialUSB.print("T");
-            sprintf((char *)buff, "%08x", frame.id);
-            SerialUSB.print((char *)buff);
-        } else {
-            SerialUSB.print("t");
-            sprintf((char *)buff, "%03x", frame.id);
-            SerialUSB.print((char *)buff);
+        if (SysSettings.lawicellExtendedMode) {
+            SerialUSB.print(micros());
+            SerialUSB.print(" - ");
+            SerialUSB.print(frame.id, HEX);
+            SerialUSB.print(" S ");
+            console.printBusName(whichBus);
+            for (int d = 0; d < frame.length; d++) {
+                SerialUSB.print(" ");
+                SerialUSB.print(frame.data.bytes[d], HEX);
+            }
         }
-        SerialUSB.print(frame.length);
-        for (int i = 0; i < frame.length; i++) {
-            sprintf((char *)buff, "%02x", frame.data.byte[i]);
-            SerialUSB.print((char *)buff);
-        }
-        if (SysSettings.lawicelTimestamping) {
-            uint16_t timestamp = (uint16_t)millis();
-            sprintf((char *)buff, "%04x", timestamp);
-            SerialUSB.print((char *)buff);
+        else {
+            if (frame.extended) {
+                SerialUSB.print("T");
+                sprintf((char *)buff, "%08x", frame.id);
+                SerialUSB.print((char *)buff);
+            } else {
+                SerialUSB.print("t");
+                sprintf((char *)buff, "%03x", frame.id);
+                SerialUSB.print((char *)buff);
+            }
+            SerialUSB.print(frame.length);
+            for (int i = 0; i < frame.length; i++) {
+                sprintf((char *)buff, "%02x", frame.data.byte[i]);
+                SerialUSB.print((char *)buff);
+            }
+            if (SysSettings.lawicelTimestamping) {
+                uint16_t timestamp = (uint16_t)millis();
+                sprintf((char *)buff, "%04x", timestamp);
+                SerialUSB.print((char *)buff);
+            }
         }
         SerialUSB.write(13);
     } else {
@@ -1059,7 +1082,6 @@ void loop()
         }
     }
     Logger::loop();
-    //this should still be here. It checks for a flag set during an interrupt
-    //sys_io_adc_poll();
+    elmEmulator.loop();
 }
 

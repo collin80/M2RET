@@ -146,9 +146,114 @@ void SerialConsole::handleConsoleCmd()
             boolean equalSign = false;
             for (int i = 0; i < ptrBuffer; i++) if (cmdBuffer[i] == '=') equalSign = true;
             if (equalSign) handleConfigCmd();
-            else handleLawicelCmd();
+            else handleLawicelCmd(); //single letter lawicel commands handled in handleShortCmd though.
         }
         ptrBuffer = 0; //reset line counter once the line has been processed
+    }
+}
+
+/*
+LAWICEL single letter commands are now mixed in with the other commands here.
+*/
+void SerialConsole::handleShortCmd()
+{
+    uint8_t val;
+
+    switch (cmdBuffer[0]) {
+    //non-lawicel commands
+    case 'h':
+    case '?':
+    case 'H':
+        printMenu();
+        break;
+    case 'K': //set all outputs high
+        for (int tout = 0; tout < NUM_OUTPUT; tout++) setOutput(tout, true);
+        Logger::console("all outputs: ON");
+        break;
+    case 'J': //set the four outputs low
+        for (int tout = 0; tout < NUM_OUTPUT; tout++) setOutput(tout, false);
+        Logger::console("all outputs: OFF");
+        break;
+    case 'R': //reset to factory defaults.
+        settings.version = 0xFF;
+        EEPROM.write(EEPROM_ADDR, settings);
+        Logger::console("Power cycle to reset to factory defaults");
+        break;
+    case 's': //start logging canbus to file
+        Logger::console("Starting logging to file.");
+        SysSettings.logToFile = true;
+        break;
+    case 'S': //stop logging canbus to file
+        Logger::console("Ceasing file logging.");
+        SysSettings.logToFile = false;
+        break;
+        
+    //Lawicel specific commands    
+    case 'O': //LAWICEL open canbus port (first one only because LAWICEL has no concept of dual canbus
+        Can0.disable_autobaud_listen_mode();
+        Can0.begin(settings.CAN0Speed, 255);
+        Can0.enable();
+        SerialUSB.write(13); //send CR to mean "ok"
+        SysSettings.lawicelMode = true;
+        break;
+    case 'C': //LAWICEL close canbus port (First one)
+        Can0.disable();
+        SerialUSB.write(13); //send CR to mean "ok"
+        break;
+    case 'L': //LAWICEL open canbus port in listen only mode
+        Can0.enable_autobaud_listen_mode();
+        Can0.begin(settings.CAN0Speed, 255);        
+        Can0.enable();
+        SerialUSB.write(13); //send CR to mean "ok"
+        SysSettings.lawicelMode = true;
+        break;
+    case 'P': //LAWICEL - poll for one waiting frame. Or, just CR if no frames
+        if (Can0.available()) SysSettings.lawicelPollCounter = 1;
+        else SerialUSB.write(13); //no waiting frames
+        break;
+    case 'A': //LAWICEL - poll for all waiting frames - CR if no frames
+        SysSettings.lawicelPollCounter = Can0.available();
+        if (SysSettings.lawicelPollCounter == 0) SerialUSB.write(13);
+        break;
+    case 'F': //LAWICEL - read status bits
+        SerialUSB.print("F00"); //bit 0 = RX Fifo Full, 1 = TX Fifo Full, 2 = Error warning, 3 = Data overrun, 5= Error passive, 6 = Arb. Lost, 7 = Bus Error
+        SerialUSB.write(13);
+        break;
+    case 'V': //LAWICEL - get version number
+        SerialUSB.print("V1013\n");
+        SysSettings.lawicelMode = true;
+        break;
+    case 'N': //LAWICEL - get serial number
+        SerialUSB.print("M2RET\n");
+        SysSettings.lawicelMode = true;
+        break;
+    case 'x':
+        SysSettings.lawicellExtendedMode = !SysSettings.lawicellExtendedMode;
+        if (SysSettings.lawicellExtendedMode) {
+            SerialUSB.print("V2\n");
+        }
+        else {
+            SerialUSB.print("LAWICEL\n");
+        }            
+        break;
+    case 'B': //LAWICEL V2 - Output list of supported buses
+        if (SysSettings.lawicellExtendedMode) {
+            for (int i = 0; i < NUM_BUSES; i++) {
+                printBusName(i);
+                SerialUSB.print("\n");
+            }
+        }
+        break;
+    case 'X':
+        if (SysSettings.lawicellExtendedMode) {
+            SerialUSB.print("Led1 green\n");
+            SerialUSB.print("Led2 yellow\n");
+            SerialUSB.print("Led3 yellow\n");
+            SerialUSB.print("Led4 yellow\n");
+            SerialUSB.print("Led5 red\n");
+            SerialUSB.print("Led6 rgb\n");            
+        }
+        break;        
     }
 }
 
@@ -158,6 +263,8 @@ void SerialConsole::handleLawicelCmd()
     CAN_FRAME outFrame;
     char buff[80];
     int val;
+    
+    tokenizeCmdString();
 
     switch (cmdBuffer[0]) {
     case 't': //transmit standard frame
@@ -184,43 +291,53 @@ void SerialConsole::handleLawicelCmd()
         Can0.sendFrame(outFrame);
         if (SysSettings.lawicelAutoPoll) SerialUSB.print("Z");
         break;
-    case 'S': //setup canbus baud via predefined speeds
-        val = parseHexCharacter(cmdBuffer[1]);
-        switch (val) {
-        case 0:
-            settings.CAN0Speed = 10000;
-            break;
-        case 1:
-            settings.CAN0Speed = 20000;
-            break;
-        case 2:
-            settings.CAN0Speed = 50000;
-            break;
-        case 3:
-            settings.CAN0Speed = 100000;
-            break;
-        case 4:
-            settings.CAN0Speed = 125000;
-            break;
-        case 5:
-            settings.CAN0Speed = 250000;
-            break;
-        case 6:
-            settings.CAN0Speed = 500000;
-            break;
-        case 7:
-            settings.CAN0Speed = 800000;
-            break;
-        case 8:
-            settings.CAN0Speed = 1000000;
-            break;
+    case 'S': 
+        if (!SysSettings.lawicellExtendedMode) {
+            //setup canbus baud via predefined speeds
+            val = parseHexCharacter(cmdBuffer[1]);
+            switch (val) {
+            case 0:
+                settings.CAN0Speed = 10000;
+                break;
+            case 1:
+                settings.CAN0Speed = 20000;
+                break;
+            case 2:
+                settings.CAN0Speed = 50000;
+                break;
+            case 3:
+                settings.CAN0Speed = 100000;
+                break;
+            case 4:
+                settings.CAN0Speed = 125000;
+                break;
+            case 5:
+                settings.CAN0Speed = 250000;
+                break;
+            case 6:
+                settings.CAN0Speed = 500000;
+                break;
+            case 7:
+                settings.CAN0Speed = 800000;
+                break;
+            case 8:
+                settings.CAN0Speed = 1000000;
+                break;
+            }
+        }
+        else { //LAWICEL V2 - Send packet out of specified bus
+            
         }
     case 's': //setup canbus baud via register writes (we can't really do that...)
         //settings.CAN0Speed = 250000;
         break;
     case 'r': //send a standard RTR frame (don't really... that's so deprecated its not even funny)
         break;
-    case 'R': //send extended RTR frame (NO! DON'T DO IT!)
+    case 'R': 
+        if (SysSettings.lawicellExtendedMode) { //Lawicel V2 - Set that we want to receive traffic from the given bus
+        }
+        else { //Lawicel V1 - send extended RTR frame (NO! DON'T DO IT!)
+        }
         break;
     case 'X': //Set autopoll off/on
         if (cmdBuffer[1] == '1') SysSettings.lawicelAutoPoll = true;
@@ -229,8 +346,18 @@ void SerialConsole::handleLawicelCmd()
     case 'W': //Dual or single filter mode
         break; //don't actually support this mode
     case 'm': //set acceptance mask - these things seem to be odd and aren't actually implemented yet
-    case 'M': //set acceptance code
-        break; //don't do anything here yet either
+    case 'M': 
+        if (SysSettings.lawicellExtendedMode) { //Lawicel V2 - Set filter mask
+        }
+        else { //Lawicel V1 - set acceptance code
+        }        
+        break;
+    case 'H':
+        if (SysSettings.lawicellExtendedMode) { //Lawicel V2 - Halt reception of traffic from given bus
+            strcpy(buff, cmdBuffer + 2);
+            
+        } 
+        break;        
     case 'U': //set uart speed. We just ignore this. You can't set a baud rate on a USB CDC port
         break; //also no action here
     case 'Z': //Turn timestamp off/on
@@ -239,6 +366,17 @@ void SerialConsole::handleLawicelCmd()
         break;
     case 'Q': //turn auto start up on/off - probably don't need to actually implement this at the moment.
         break; //no action yet or maybe ever
+    case 'C': //Lawicel V2 - configure one of the buses
+        if (SysSettings.lawicellExtendedMode) {
+            //at least two parameters separated by spaces. First BUS ID (CAN0, CAN1, SWCAN, etc) then speed (or more params separated by #'s)
+            uppercaseToken(tokens[1]); //name of bus to send on
+            if (!stricmp(tokens[1], "CAN0"));
+            if (!stricmp(tokens[1], "CAN1")); 
+            if (!stricmp(tokens[1], "SWCAN"));
+            if (!stricmp(tokens[1], "LIN1"));
+            if (!stricmp(tokens[1], "LIN2"));
+        }
+        break;
     }
     SerialUSB.write(13);
 }
@@ -530,79 +668,6 @@ void SerialConsole::handleConfigCmd()
     }
 }
 
-/*
-LAWICEL single letter commands are now mixed in with the other commands here.
-*/
-void SerialConsole::handleShortCmd()
-{
-    uint8_t val;
-
-    switch (cmdBuffer[0]) {
-    case 'h':
-    case '?':
-    case 'H':
-        printMenu();
-        break;
-    case 'K': //set all outputs high
-        for (int tout = 0; tout < NUM_OUTPUT; tout++) setOutput(tout, true);
-        Logger::console("all outputs: ON");
-        break;
-    case 'J': //set the four outputs low
-        for (int tout = 0; tout < NUM_OUTPUT; tout++) setOutput(tout, false);
-        Logger::console("all outputs: OFF");
-        break;
-    case 'R': //reset to factory defaults.
-        settings.version = 0xFF;
-        EEPROM.write(EEPROM_ADDR, settings);
-        Logger::console("Power cycle to reset to factory defaults");
-        break;
-    case 's': //start logging canbus to file
-        Logger::console("Starting logging to file.");
-        SysSettings.logToFile = true;
-        break;
-    case 'S': //stop logging canbus to file
-        Logger::console("Ceasing file logging.");
-        SysSettings.logToFile = false;
-        break;
-    case 'O': //LAWICEL open canbus port (first one only because LAWICEL has no concept of dual canbus
-        //Can0.begin(settings.CAN0Speed, SysSettings.CAN1EnablePin);
-        //Can0.enable();
-        SerialUSB.write(13); //send CR to mean "ok"
-        SysSettings.lawicelMode = true;
-        break;
-    case 'C': //LAWICEL close canbus port (First one)
-        Can0.disable();
-        SerialUSB.write(13); //send CR to mean "ok"
-        break;
-    case 'L': //LAWICEL open canbus port in listen only mode
-        Can0.begin(settings.CAN0Speed, 255); //this is NOT really listen only mode but it isn't supported yet so for now...
-        Can0.enable();
-        SerialUSB.write(13); //send CR to mean "ok"
-        SysSettings.lawicelMode = true;
-        break;
-    case 'P': //LAWICEL - poll for one waiting frame. Or, just CR if no frames
-        if (Can0.available()) SysSettings.lawicelPollCounter = 1;
-        else SerialUSB.write(13); //no waiting frames
-        break;
-    case 'A': //LAWICEL - poll for all waiting frames - CR if no frames
-        SysSettings.lawicelPollCounter = Can0.available();
-        if (SysSettings.lawicelPollCounter == 0) SerialUSB.write(13);
-        break;
-    case 'F': //LAWICEL - read status bits
-        SerialUSB.print("F00"); //bit 0 = RX Fifo Full, 1 = TX Fifo Full, 2 = Error warning, 3 = Data overrun, 5= Error passive, 6 = Arb. Lost, 7 = Bus Error
-        SerialUSB.write(13);
-        break;
-    case 'V': //LAWICEL - get version number
-        SerialUSB.print("V1013\n");
-        SysSettings.lawicelMode = true;
-        break;
-    case 'N': //LAWICEL - get serial number
-        SerialUSB.print("ND00D\n");
-        SysSettings.lawicelMode = true;
-        break;
-    }
-}
-
 //CAN0FILTER%i=%%i,%%i,%%i,%%i (ID, Mask, Extended, Enabled)", i);
 bool SerialConsole::handleFilterSet(uint8_t bus, uint8_t filter, char *values)
 {
@@ -692,3 +757,64 @@ unsigned int SerialConsole::parseHexString(char *str, int length)
     return result;
 }
 
+//Tokenize cmdBuffer on space boundaries - up to 10 tokens supported
+void SerialConsole::tokenizeCmdString() {
+   int idx = 0;
+   char *tok;
+   tok = strtok(cmdBuffer, " ");
+   if (tok != nullptr) strcpy(tokens[idx], tok);
+       else tokens[idx][0] = 0;
+   while (tokens[idx] != nullptr && idx < 13) {
+       idx++;
+       tok = strtok(nullptr, " ");
+       if (tok != nullptr) strcpy(tokens[idx], tok);
+            else tokens[idx][0] = 0;
+   }
+}
+
+void SerialConsole::uppercaseToken(char *token) {
+    int idx = 0;
+    while (token[idx] != 0 && idx < 9) {
+        token[idx] = toupper(token[idx]);
+        idx++;
+    }
+    token[idx] = 0;
+}
+
+void SerialConsole::printBusName(int bus) {
+    switch (bus) {
+    case 0:
+        SerialUSB.print("CAN0");
+        break;
+    case 1:
+        SerialUSB.print("CAN1");
+        break;
+    case 2:
+        SerialUSB.print("SWCAN");
+        break;
+    case 3:
+        SerialUSB.print("LIN1");
+        break;
+    case 4:
+        SerialUSB.print("LIN2");
+        break;
+    default:
+        SerialUSB.print("UNKNOWN");
+        break;
+    }
+}
+
+//Expecting to find ID in tokens[2] then zero or more data bytes
+bool SerialConsole::parseLawicelCANCmd(CAN_FRAME &frame) {
+    if (tokens[2] == nullptr) return false;
+    frame.id = strtol(tokens[2], nullptr, 16);
+    int idx = 3;
+    int dataLen = 0;
+    while (tokens[idx] != nullptr) {
+        frame.data.bytes[dataLen++] = strtol(tokens[idx], nullptr, 16);
+        idx++;
+    }
+    frame.length = dataLen;
+        
+    return true;
+}

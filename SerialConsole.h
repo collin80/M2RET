@@ -30,12 +30,14 @@ SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 #include "config.h"
 #include "sys_io.h"
 #include "M2RET.h"
+#include "due_can.h"
 
 class SerialConsole {
 public:
     SerialConsole();
     void printMenu();
     void rcvCharacter(uint8_t chr);
+    void printBusName(int bus);
 
 protected:
     enum CONSOLE_STATE {
@@ -44,6 +46,7 @@ protected:
 
 private:
     char cmdBuffer[80];
+    char tokens[14][10];
     int ptrBuffer;
     int state;
 
@@ -56,6 +59,9 @@ private:
     bool handleCANSend(CANRaw &port, char *inputString);
     unsigned int parseHexCharacter(char chr);
     unsigned int parseHexString(char *str, int length);
+    void tokenizeCmdString();
+    void uppercaseToken(char *token);
+    bool parseLawicelCANCmd(CAN_FRAME &frame);
 };
 
 #endif /* SERIALCONSOLE_H_ */
