@@ -237,6 +237,7 @@ void setup()
     //delay(5000); //just for testing. Don't use in production
 
     Serial.begin(115200);
+    
     Wire.begin();
 
     loadSettings();
@@ -733,6 +734,7 @@ void loop()
             else if (in_byte == 0xE7) {
                 settings.useBinarySerialComm = true;
                 SysSettings.lawicelMode = false;
+                setPromiscuousMode(); //going into binary comm will set promisc. mode too.
             } else {
                 console.rcvCharacter((uint8_t)in_byte);
             }
