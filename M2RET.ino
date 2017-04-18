@@ -157,8 +157,8 @@ void loadSettings()
 
     SysSettings.SDCardInserted = false;
 
-    switch (settings.sysType) {
-    case 0:  //First gen M2 board
+//    switch (settings.sysType) {
+//    case 0:  //First gen M2 board
         Logger::console("Running on Macchina M2 hardware");
         SysSettings.useSD = true;
         SysSettings.logToFile = false;
@@ -194,8 +194,8 @@ void loadSettings()
         digitalWrite(32, HIGH);
         digitalWriteNonDue(X0, HIGH);
         setSWCANSleep();
-        break;
-    }
+//        break;
+//    }
 
 //	if (settings.singleWireMode && settings.CAN1_Enabled) setSWCANEnabled();
 //	else setSWCANSleep(); //start out setting single wire to sleep.

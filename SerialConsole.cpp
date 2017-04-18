@@ -59,8 +59,6 @@ void SerialConsole::printMenu()
     SerialUSB.println();
     SerialUSB.println("Short Commands:");
     SerialUSB.println("h = help (displays this message)");
-    SerialUSB.println("K = set all outputs high");
-    SerialUSB.println("J = set all outputs low");
     SerialUSB.println("R = reset to factory defaults");
     SerialUSB.println("s = Start logging to file");
     SerialUSB.println("S = Stop logging to file");
@@ -165,14 +163,6 @@ void SerialConsole::handleShortCmd()
     case '?':
     case 'H':
         printMenu();
-        break;
-    case 'K': //set all outputs high
-        for (int tout = 0; tout < NUM_OUTPUT; tout++) setOutput(tout, true);
-        Logger::console("all outputs: ON");
-        break;
-    case 'J': //set the four outputs low
-        for (int tout = 0; tout < NUM_OUTPUT; tout++) setOutput(tout, false);
-        Logger::console("all outputs: OFF");
         break;
     case 'R': //reset to factory defaults.
         settings.version = 0xFF;
@@ -325,8 +315,40 @@ void SerialConsole::handleLawicelCmd()
                 break;
             }
         }
-        else { //LAWICEL V2 - Send packet out of specified bus
-            
+        else { //LAWICEL V2 - Send packet out of specified bus - S <Bus> <ID> <Data0> <Data1> <...>
+            uint8_t bytes[8];
+            uint32_t id;
+            int numBytes = 0;
+            id = strtol(tokens[2], nullptr, 16);
+            for (int b = 0; b < 8; b++) {
+                if (tokens[3 + b][0] != 0) {
+                    bytes[b] = strtol(tokens[3 + b], nullptr, 16);
+                    numBytes++;
+                }
+                else break; //break for loop because we're obviously done.
+            }
+            if (!stricmp(tokens[1], "CAN0")) {
+                CAN_FRAME outFrame;
+                outFrame.id = id;
+                outFrame.length = numBytes;
+                outFrame.extended = false;
+                for (int b = 0; b < numBytes; b++) outFrame.data.bytes[b] = bytes[b];
+                Can0.sendFrame(outFrame);
+            }
+            if (!stricmp(tokens[1], "CAN1")) {
+                CAN_FRAME outFrame;
+                outFrame.id = id;
+                outFrame.length = numBytes;
+                outFrame.extended = false;
+                for (int b = 0; b < numBytes; b++) outFrame.data.bytes[b] = bytes[b];
+                Can1.sendFrame(outFrame);                
+            }
+            if (!stricmp(tokens[1], "SWCAN")) {
+            }
+            if (!stricmp(tokens[1], "LIN1")) {
+            }
+            if (!stricmp(tokens[1], "LIN2")) {
+            }
         }
     case 's': //setup canbus baud via register writes (we can't really do that...)
         //settings.CAN0Speed = 250000;
@@ -334,7 +356,12 @@ void SerialConsole::handleLawicelCmd()
     case 'r': //send a standard RTR frame (don't really... that's so deprecated its not even funny)
         break;
     case 'R': 
-        if (SysSettings.lawicellExtendedMode) { //Lawicel V2 - Set that we want to receive traffic from the given bus
+        if (SysSettings.lawicellExtendedMode) { //Lawicel V2 - Set that we want to receive traffic from the given bus - R <BUSID>
+            if (!stricmp(tokens[1], "CAN0")) SysSettings.lawicelBusReception[0] = true;
+            if (!stricmp(tokens[1], "CAN1")) SysSettings.lawicelBusReception[1] = true; 
+            if (!stricmp(tokens[1], "SWCAN")) SysSettings.lawicelBusReception[2] = true;
+            if (!stricmp(tokens[1], "LIN1")) SysSettings.lawicelBusReception[3] = true;
+            if (!stricmp(tokens[1], "LIN2")) SysSettings.lawicelBusReception[4] = true;                                            
         }
         else { //Lawicel V1 - send extended RTR frame (NO! DON'T DO IT!)
         }
@@ -347,15 +374,37 @@ void SerialConsole::handleLawicelCmd()
         break; //don't actually support this mode
     case 'm': //set acceptance mask - these things seem to be odd and aren't actually implemented yet
     case 'M': 
-        if (SysSettings.lawicellExtendedMode) { //Lawicel V2 - Set filter mask
+        if (SysSettings.lawicellExtendedMode) { //Lawicel V2 - Set filter mask - M <busid> <Mask> <FilterID> <Ext?>
+            int mask = strtol(tokens[2], nullptr, 16);
+            int filt = strtol(tokens[3], nullptr, 16);
+            if (!stricmp(tokens[1], "CAN0")) {
+                if (!stricmp(tokens[4], "X")) Can0.setRXFilter(0, filt, mask, true);
+                    else Can0.setRXFilter(0, filt, mask, false);
+            }           
+            if (!stricmp(tokens[1], "CAN1")) {
+                if (!stricmp(tokens[4], "X")) Can1.setRXFilter(0, filt, mask, true);
+                    else Can1.setRXFilter(0, filt, mask, false);                
+            }
+            if (!stricmp(tokens[1], "SWCAN")) {
+                //set mask on SWCan
+            }
+            if (!stricmp(tokens[1], "LIN1")) {
+                //set mask on LIN. Can you do that?!
+            }
+            if (!stricmp(tokens[1], "LIN2")) {
+                //set mask on LIN if that's even possible?!
+            }            
         }
         else { //Lawicel V1 - set acceptance code
         }        
         break;
     case 'H':
-        if (SysSettings.lawicellExtendedMode) { //Lawicel V2 - Halt reception of traffic from given bus
-            strcpy(buff, cmdBuffer + 2);
-            
+        if (SysSettings.lawicellExtendedMode) { //Lawicel V2 - Halt reception of traffic from given bus - H <busid>
+            if (!stricmp(tokens[1], "CAN0")) SysSettings.lawicelBusReception[0] = false;
+            if (!stricmp(tokens[1], "CAN1")) SysSettings.lawicelBusReception[1] = false; 
+            if (!stricmp(tokens[1], "SWCAN")) SysSettings.lawicelBusReception[2] = false;
+            if (!stricmp(tokens[1], "LIN1")) SysSettings.lawicelBusReception[3] = false;
+            if (!stricmp(tokens[1], "LIN2")) SysSettings.lawicelBusReception[4] = false;                        
         } 
         break;        
     case 'U': //set uart speed. We just ignore this. You can't set a baud rate on a USB CDC port
@@ -366,15 +415,25 @@ void SerialConsole::handleLawicelCmd()
         break;
     case 'Q': //turn auto start up on/off - probably don't need to actually implement this at the moment.
         break; //no action yet or maybe ever
-    case 'C': //Lawicel V2 - configure one of the buses
+    case 'C': //Lawicel V2 - configure one of the buses - C <busid> <speed> <any additional needed params> 
         if (SysSettings.lawicellExtendedMode) {
             //at least two parameters separated by spaces. First BUS ID (CAN0, CAN1, SWCAN, etc) then speed (or more params separated by #'s)
-            uppercaseToken(tokens[1]); //name of bus to send on
-            if (!stricmp(tokens[1], "CAN0"));
-            if (!stricmp(tokens[1], "CAN1")); 
-            if (!stricmp(tokens[1], "SWCAN"));
-            if (!stricmp(tokens[1], "LIN1"));
-            if (!stricmp(tokens[1], "LIN2"));
+            int speed = atoi(tokens[2]);
+            if (!stricmp(tokens[1], "CAN0")) {
+                Can0.begin(speed, 255);
+            }           
+            if (!stricmp(tokens[1], "CAN1")) {
+                Can1.begin(speed, 255);
+            }
+            if (!stricmp(tokens[1], "SWCAN")) {
+                //can't set speed of SWCAN yet
+            }
+            if (!stricmp(tokens[1], "LIN1")) {
+                //can't set speed of LIN1 yet
+            }
+            if (!stricmp(tokens[1], "LIN2")) {
+                //can't set speed of LIN2 yet
+            }
         }
         break;
     }
@@ -632,26 +691,31 @@ void SerialConsole::handleConfigCmd()
         switch (newValue) {
         case 0:
             Logger::setLoglevel(Logger::Debug);
+            settings.logLevel = 0;
             Logger::console("setting loglevel to 'debug'");
             writeEEPROM = true;
             break;
         case 1:
             Logger::setLoglevel(Logger::Info);
+            settings.logLevel = 1;
             Logger::console("setting loglevel to 'info'");
             writeEEPROM = true;
             break;
         case 2:
             Logger::console("setting loglevel to 'warning'");
+            settings.logLevel = 2;
             Logger::setLoglevel(Logger::Warn);
             writeEEPROM = true;
             break;
         case 3:
             Logger::console("setting loglevel to 'error'");
+            settings.logLevel = 3;
             Logger::setLoglevel(Logger::Error);
             writeEEPROM = true;
             break;
         case 4:
             Logger::console("setting loglevel to 'off'");
+            settings.logLevel = 4;
             Logger::setLoglevel(Logger::Off);
             writeEEPROM = true;
             break;
@@ -761,6 +825,9 @@ unsigned int SerialConsole::parseHexString(char *str, int length)
 void SerialConsole::tokenizeCmdString() {
    int idx = 0;
    char *tok;
+   
+   for (int i = 0; i < 13; i++) tokens[i][0] = 0;
+   
    tok = strtok(cmdBuffer, " ");
    if (tok != nullptr) strcpy(tokens[idx], tok);
        else tokens[idx][0] = 0;
