@@ -50,7 +50,7 @@ SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 #define CFG_BUILD_NUM   338
 #define CFG_VERSION "M2RET Alpha April 10 2017"
 #define EEPROM_ADDR     0
-#define EEPROM_VER      0x17
+#define EEPROM_VER      0x18
 
 #define NUM_ANALOG  4
 #define NUM_DIGITAL 4

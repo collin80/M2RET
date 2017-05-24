@@ -69,7 +69,10 @@ DigitalCANToggleSettings digToggleSettings;
 //file system on sdcard (HSCMI connected)
 FileStore FS;
 
-SWcan SWCAN(78);
+//CS = SPI0_nCS3 = B23 = Digital pin 78
+//INT = SWC_nINT = C16 = Digital pin 47
+SWcan SWCAN(78, 47);
+
 lin_stack LIN1(1, 0); // Sniffer
 lin_stack LIN2(2, 0); // Sniffer
 
@@ -79,6 +82,10 @@ SerialConsole console;
 
 bool digTogglePinState;
 uint8_t digTogglePinCounter;
+
+void CANHandler() {
+    SWCAN.intHandler();
+}
 
 //initializes all the system EEPROM values. Chances are this should be broken out a bit but
 //there is only one checksum check for all of them so it's simple to do it all here.
@@ -213,20 +220,17 @@ void loadSettings()
 
 void setSWCANSleep()
 {
-    digitalWrite(13, LOW);
-    digitalWriteNonDue(PIN_EMAC_EREFCK, LOW);
+    SWCAN.mode(0);
 }
 
 void setSWCANEnabled()
 {
-    digitalWrite(13, HIGH);
-    digitalWriteNonDue(PIN_EMAC_EREFCK, HIGH);
+    SWCAN.mode(3);
 }
 
 void setSWCANWakeup()
 {
-    digitalWrite(13, LOW);
-    digitalWriteNonDue(PIN_EMAC_EREFCK, HIGH);
+    SWCAN.mode(2);
 }
 
 void setup()
@@ -296,6 +300,8 @@ void setup()
         }
         Can0.enable();
         Can0.begin(settings.CAN0Speed, 255);
+        SerialUSB.print("Enabling CAN0 with speed ");
+        SerialUSB.println(settings.CAN0Speed);
     } else Can0.disable();
 
     if (settings.CAN1_Enabled) {
@@ -306,19 +312,25 @@ void setup()
         }
         Can1.enable();
         Can1.begin(settings.CAN1Speed, 255);
+        SerialUSB.print("Enabling CAN0 with speed ");
+        SerialUSB.println(settings.CAN0Speed);        
     } else Can1.disable();
 
     if (settings.SWCAN_Enabled) {
-        SWCAN.setupSW(0x00);
-        delay(100);
+        SWCAN.setupSW(settings.SWCANSpeed);
+        delay(20);
         SWCAN.mode(3); // Go to normal mode. 0 - Sleep, 1 - High Speed, 2 - High Voltage Wake-Up, 3 - Normal
     }
+    
+    attachInterrupt(47, CANHandler, FALLING); //enable interrupt for SWCAN
+    
 
+/*
     if (settings.LIN_Enabled) {
         LIN1.setSerial();
         LIN2.setSerial();
-    }
-
+    } */
+/*
     for (int i = 0; i < 7; i++) {
         if (settings.CAN0Filters[i].enabled) {
             Can0.setRXFilter(i, settings.CAN0Filters[i].id,
@@ -328,14 +340,16 @@ void setup()
             Can1.setRXFilter(i, settings.CAN1Filters[i].id,
                              settings.CAN1Filters[i].mask, settings.CAN1Filters[i].extended);
         }
-    }
+    }*/
+
+    setPromiscuousMode();
 
     SysSettings.lawicelMode = false;
     SysSettings.lawicelAutoPoll = false;
     SysSettings.lawicelTimestamping = false;
     SysSettings.lawicelPollCounter = 0;
     
-    elmEmulator.setup();
+    //elmEmulator.setup();
 
     SerialUSB.print("Done with init\n");
 }
@@ -385,6 +399,18 @@ void sendFrame(CANRaw &bus, CAN_FRAME &frame)
     sendFrameToFile(frame, whichBus); //copy sent frames to file as well.
     addBits(whichBus, frame);
     toggleTXLED();
+}
+
+void sendFrameSW(CAN_FRAME &frame)
+{
+    SWFRAME swFrame;
+    swFrame.id = frame.id;
+    swFrame.extended = frame.extended;
+    swFrame.length = frame.length;
+    swFrame.data.value = frame.data.value;
+    SWCAN.EnqueueTX(swFrame);
+    toggleTXLED();
+    sendFrameToFile(frame, 2);
 }
 
 void toggleRXLED()
@@ -450,8 +476,9 @@ void sendFrameToUSB(CAN_FRAME &frame, int whichBus)
         if (SysSettings.lawicellExtendedMode) {
             SerialUSB.print(micros());
             SerialUSB.print(" - ");
-            SerialUSB.print(frame.id, HEX);
-            SerialUSB.print(" S ");
+            SerialUSB.print(frame.id, HEX);            
+            if (frame.extended) SerialUSB.print(" X ");
+            else SerialUSB.print(" S ");
             console.printBusName(whichBus);
             for (int d = 0; d < frame.length; d++) {
                 SerialUSB.print(" ");
@@ -625,6 +652,7 @@ void loop()
 {
     static int loops = 0;
     CAN_FRAME incoming;
+    SWFRAME swIncoming;
     static CAN_FRAME build_out_frame;
     static int out_bus;
     int in_byte;
@@ -691,6 +719,20 @@ void loop()
         if (digToggleSettings.enabled && (digToggleSettings.mode & 1) && (digToggleSettings.mode & 4)) processDigToggleFrame(incoming);
         if (SysSettings.logToFile) sendFrameToFile(incoming, 1);
     }
+    
+    if (SWCAN.GetRXFrame(swIncoming)) {
+        //copy into our normal CAN struct so we can pretend and all existing functions can access the frame
+        incoming.id = swIncoming.id;
+        incoming.extended = swIncoming.extended;
+        incoming.length = swIncoming.length;
+        incoming.data.value = swIncoming.data.value;
+        toggleRXLED();
+        if (isConnected) sendFrameToUSB(incoming, 2);
+        //TODO: Maybe support digital toggle system on swcan too.
+        if (SysSettings.logToFile) sendFrameToFile(incoming, 2);      
+    }
+
+    
     if (SysSettings.lawicelPollCounter > 0) SysSettings.lawicelPollCounter--;
     //}
 
@@ -903,6 +945,7 @@ void loop()
                     */
                     if (out_bus == 0) sendFrame(Can0, build_out_frame);
                     if (out_bus == 1) sendFrame(Can1, build_out_frame);
+                    if (out_bus == 2) sendFrameSW(build_out_frame);
                     /*
                     if (settings.singleWireMode == 1)
                     		   {
