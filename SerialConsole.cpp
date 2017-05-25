@@ -39,6 +39,7 @@ extern EEPROMCLASS *eeprom;
 extern SWcan SWCAN;
 extern lin_stack LIN1;
 extern lin_stack LIN2;
+extern void CANHandler();
 
 SerialConsole::SerialConsole()
 {
@@ -93,6 +94,14 @@ void SerialConsole::printMenu()
         Logger::console(buff, settings.CAN1Filters[i].id, settings.CAN1Filters[i].mask,
                         settings.CAN1Filters[i].extended, settings.CAN1Filters[i].enabled);
     }
+    
+    SerialUSB.println();
+
+    Logger::console("SWCANEN=%i - Enable/Disable Single Wire CAN (0 = Disable, 1 = Enable)", settings.SWCAN_Enabled);
+    Logger::console("SWCANSPEED=%i - Set speed of Single Wire CAN in baud (33000, 93000, etc)", settings.SWCANSpeed);
+    Logger::console("SWCANLISTENONLY=%i - Enable/Disable Listen Only Mode (0 = Dis, 1 = En)", settings.SWCANListenOnly);
+    SerialUSB.println();
+    
     Logger::console("CAN0SEND=ID,LEN,<BYTES SEPARATED BY COMMAS> - Ex: CAN0SEND=0x200,4,1,2,3,4");
     Logger::console("CAN1SEND=ID,LEN,<BYTES SEPARATED BY COMMAS> - Ex: CAN1SEND=0x200,8,00,00,00,10,0xAA,0xBB,0xA0,00");
     Logger::console("SWSEND=ID,LEN,<BYTES SEPARATED BY COMMAS> - Ex: SWSEND=0x100,4,10,20,30,40");
@@ -513,21 +522,46 @@ void SerialConsole::handleConfigCmd()
         else Can1.disable();
         settings.CAN1_Enabled = newValue;
         writeEEPROM = true;
+    } else if (cmdString == String("SWCANEN")) {
+        if (newValue < 0) newValue = 0;
+        if (newValue > 1) newValue = 1;
+        Logger::console("Setting SWCAN Enabled to %i", newValue);
+        if (newValue == 1) {
+            SWCAN.setupSW(settings.SWCANSpeed);       
+            delay(20);
+            SWCAN.mode(3); // Go to normal mode. 0 - Sleep, 1 - High Speed, 2 - High Voltage Wake-Up, 3 - Normal
+            attachInterrupt(47, CANHandler, FALLING); //enable interrupt for SWCAN
+        }
+        else {
+            SWCAN.Reset();
+            SWCAN.mode(0); //go to sleep
+        }
+        settings.SWCAN_Enabled = newValue;
+        writeEEPROM = true;        
     } else if (cmdString == String("CAN0SPEED")) {
         if (newValue > 0 && newValue <= 1000000) {
             Logger::console("Setting CAN0 Baud Rate to %i", newValue);
             settings.CAN0Speed = newValue;
-            Can0.begin(settings.CAN0Speed, 255);
+            if (settings.CAN0_Enabled) Can0.begin(settings.CAN0Speed, 255);
             writeEEPROM = true;
         } else Logger::console("Invalid baud rate! Enter a value 1 - 1000000");
     } else if (cmdString == String("CAN1SPEED")) {
         if (newValue > 0 && newValue <= 1000000) {
             Logger::console("Setting CAN1 Baud Rate to %i", newValue);
             settings.CAN1Speed = newValue;
-            Can1.begin(settings.CAN1Speed, 255);
+            if (settings.CAN1_Enabled) Can1.begin(settings.CAN1Speed, 255);
             writeEEPROM = true;
         } else Logger::console("Invalid baud rate! Enter a value 1 - 1000000");
-
+    } else if (cmdString == String("SWCANSPEED")) {
+        if (newValue > 0 && newValue <= 1000000) {
+            Logger::console("Setting Single Wire CAN Baud Rate to %i", newValue);
+            settings.SWCANSpeed = newValue;
+            if (settings.SWCAN_Enabled) 
+            {               
+                SWCAN.setupSW(settings.SWCANSpeed);       
+            }
+            writeEEPROM = true;
+        } else Logger::console("Invalid baud rate! Enter a value 1 - 1000000");
     } else if (cmdString == String("CAN0LISTENONLY")) {
         if (newValue >= 0 && newValue <= 1) {
             Logger::console("Setting CAN0 Listen Only to %i", newValue);
@@ -550,6 +584,17 @@ void SerialConsole::handleConfigCmd()
             }
             writeEEPROM = true;
         } else Logger::console("Invalid setting! Enter a value 0 - 1");
+    } else if (cmdString == String("SWCANLISTENONLY")) {
+        if (newValue >= 0 && newValue <= 1) {
+            Logger::console("Setting SWCAN Listen Only to %i", newValue);
+            settings.SWCANListenOnly = newValue;
+            if (settings.CAN1ListenOnly) {
+                //Can1.enable_autobaud_listen_mode();
+            } else {
+                //Can1.disable_autobaud_listen_mode();
+            }
+            writeEEPROM = true;
+        } else Logger::console("Invalid setting! Enter a value 0 - 1");        
     } else if (cmdString == String("CAN0FILTER0")) { //someone should kick me in the face for this laziness... FIX THIS!
         handleFilterSet(0, 0, newString);
     } else if (cmdString == String("CAN0FILTER1")) {

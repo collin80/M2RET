@@ -47,8 +47,8 @@ SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 //The host should be polling every 1ms or so and so this time should be a small multiple of that
 #define SER_BUFF_FLUSH_INTERVAL 2000
 
-#define CFG_BUILD_NUM   338
-#define CFG_VERSION "M2RET Alpha April 10 2017"
+#define CFG_BUILD_NUM   339
+#define CFG_VERSION "M2RET Alpha May 25 2017"
 #define EEPROM_ADDR     0
 #define EEPROM_VER      0x18
 
