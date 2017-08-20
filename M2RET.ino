@@ -69,7 +69,10 @@ DigitalCANToggleSettings digToggleSettings;
 //file system on sdcard (HSCMI connected)
 FileStore FS;
 
-SWcan SWCAN(78);
+//CS = SPI0_nCS3 = B23 = Digital pin 78
+//INT = SWC_nINT = C16 = Digital pin 47
+SWcan SWCAN(78, 47);
+
 lin_stack LIN1(1, 0); // Sniffer
 lin_stack LIN2(2, 0); // Sniffer
 
@@ -79,6 +82,10 @@ SerialConsole console;
 
 bool digTogglePinState;
 uint8_t digTogglePinCounter;
+
+void CANHandler() {
+    SWCAN.intHandler();
+}
 
 //initializes all the system EEPROM values. Chances are this should be broken out a bit but
 //there is only one checksum check for all of them so it's simple to do it all here.
@@ -99,7 +106,7 @@ void loadSettings()
         settings.CAN0ListenOnly = false;
         settings.CAN1ListenOnly = false;
         settings.SWCAN_Enabled = false;
-        settings.SWCANListenOnly = false;
+        settings.SWCANListenOnly = false; //TODO: Not currently respected or implemented.
         settings.SWCANSpeed = 33333;
         settings.LIN_Enabled = false;
         settings.LINSpeed = 19200;
@@ -213,20 +220,17 @@ void loadSettings()
 
 void setSWCANSleep()
 {
-    digitalWrite(13, LOW);
-    digitalWriteNonDue(PIN_EMAC_EREFCK, LOW);
+    SWCAN.mode(0);
 }
 
 void setSWCANEnabled()
 {
-    digitalWrite(13, HIGH);
-    digitalWriteNonDue(PIN_EMAC_EREFCK, HIGH);
+    SWCAN.mode(3);
 }
 
 void setSWCANWakeup()
 {
-    digitalWrite(13, LOW);
-    digitalWriteNonDue(PIN_EMAC_EREFCK, HIGH);
+    SWCAN.mode(2);
 }
 
 void setup()
@@ -239,6 +243,7 @@ void setup()
     Serial.begin(115200);
     
     Wire.begin();
+    SPI.begin();
 
     loadSettings();
 
@@ -296,6 +301,8 @@ void setup()
         }
         Can0.enable();
         Can0.begin(settings.CAN0Speed, 255);
+        SerialUSB.print("Enabled CAN0 with speed ");
+        SerialUSB.println(settings.CAN0Speed);
     } else Can0.disable();
 
     if (settings.CAN1_Enabled) {
@@ -306,19 +313,25 @@ void setup()
         }
         Can1.enable();
         Can1.begin(settings.CAN1Speed, 255);
+        SerialUSB.print("Enabled CAN1 with speed ");
+        SerialUSB.println(settings.CAN1Speed);        
     } else Can1.disable();
 
     if (settings.SWCAN_Enabled) {
-        SWCAN.setupSW(0x00);
-        delay(100);
+        SWCAN.setupSW(settings.SWCANSpeed);       
+        delay(20);
         SWCAN.mode(3); // Go to normal mode. 0 - Sleep, 1 - High Speed, 2 - High Voltage Wake-Up, 3 - Normal
+        attachInterrupt(47, CANHandler, FALLING); //enable interrupt for SWCAN
+        SerialUSB.print("Enabled SWCAN with speed ");
+        SerialUSB.println(settings.SWCANSpeed);
     }
 
+/*
     if (settings.LIN_Enabled) {
         LIN1.setSerial();
         LIN2.setSerial();
-    }
-
+    } */
+/*
     for (int i = 0; i < 7; i++) {
         if (settings.CAN0Filters[i].enabled) {
             Can0.setRXFilter(i, settings.CAN0Filters[i].id,
@@ -328,14 +341,16 @@ void setup()
             Can1.setRXFilter(i, settings.CAN1Filters[i].id,
                              settings.CAN1Filters[i].mask, settings.CAN1Filters[i].extended);
         }
-    }
+    }*/
+
+    setPromiscuousMode();
 
     SysSettings.lawicelMode = false;
     SysSettings.lawicelAutoPoll = false;
     SysSettings.lawicelTimestamping = false;
     SysSettings.lawicelPollCounter = 0;
     
-    elmEmulator.setup();
+    //elmEmulator.setup();
 
     SerialUSB.print("Done with init\n");
 }
@@ -385,6 +400,18 @@ void sendFrame(CANRaw &bus, CAN_FRAME &frame)
     sendFrameToFile(frame, whichBus); //copy sent frames to file as well.
     addBits(whichBus, frame);
     toggleTXLED();
+}
+
+void sendFrameSW(CAN_FRAME &frame)
+{
+    SWFRAME swFrame;
+    swFrame.id = frame.id;
+    swFrame.extended = frame.extended;
+    swFrame.length = frame.length;
+    swFrame.data.value = frame.data.value;
+    SWCAN.EnqueueTX(swFrame);
+    toggleTXLED();
+    sendFrameToFile(frame, 2);
 }
 
 void toggleRXLED()
@@ -450,8 +477,9 @@ void sendFrameToUSB(CAN_FRAME &frame, int whichBus)
         if (SysSettings.lawicellExtendedMode) {
             SerialUSB.print(micros());
             SerialUSB.print(" - ");
-            SerialUSB.print(frame.id, HEX);
-            SerialUSB.print(" S ");
+            SerialUSB.print(frame.id, HEX);            
+            if (frame.extended) SerialUSB.print(" X ");
+            else SerialUSB.print(" S ");
             console.printBusName(whichBus);
             for (int d = 0; d < frame.length; d++) {
                 SerialUSB.print(" ");
@@ -625,6 +653,7 @@ void loop()
 {
     static int loops = 0;
     CAN_FRAME incoming;
+    SWFRAME swIncoming;
     static CAN_FRAME build_out_frame;
     static int out_bus;
     int in_byte;
@@ -691,6 +720,20 @@ void loop()
         if (digToggleSettings.enabled && (digToggleSettings.mode & 1) && (digToggleSettings.mode & 4)) processDigToggleFrame(incoming);
         if (SysSettings.logToFile) sendFrameToFile(incoming, 1);
     }
+    
+    if (SWCAN.GetRXFrame(swIncoming)) {
+        //copy into our normal CAN struct so we can pretend and all existing functions can access the frame
+        incoming.id = swIncoming.id;
+        incoming.extended = swIncoming.extended;
+        incoming.length = swIncoming.length;
+        incoming.data.value = swIncoming.data.value;
+        toggleRXLED();
+        if (isConnected) sendFrameToUSB(incoming, 2);
+        //TODO: Maybe support digital toggle system on swcan too.
+        if (SysSettings.logToFile) sendFrameToFile(incoming, 2);      
+    }
+
+    
     if (SysSettings.lawicelPollCounter > 0) SysSettings.lawicelPollCounter--;
     //}
 
@@ -741,12 +784,12 @@ void loop()
             break;
         case GET_COMMAND:
             switch (in_byte) {
-            case 0:
+            case PROTO_BUILD_CAN_FRAME:
                 state = BUILD_CAN_FRAME;
                 buff[0] = 0xF1;
                 step = 0;
                 break;
-            case 1:
+            case PROTO_TIME_SYNC:
                 state = TIME_SYNC;
                 step = 0;
                 buff[0] = 0xF1;
@@ -757,7 +800,7 @@ void loop()
                 buff[5] = (uint8_t)(now >> 24);
                 SerialUSB.write(buff, 6);
                 break;
-            case 2:
+            case PROTO_DIG_INPUTS:
                 //immediately return the data for digital inputs
                 temp8 = getDigital(0) + (getDigital(1) << 1) + (getDigital(2) << 2) + (getDigital(3) << 3);
                 buff[0] = 0xF1;
@@ -768,7 +811,7 @@ void loop()
                 SerialUSB.write(buff, 4);
                 state = IDLE;
                 break;
-            case 3:
+            case PROTO_ANA_INPUTS:
                 //immediately return data on analog inputs
                 temp16 = getAnalog(0);
                 buff[0] = 0xF1;
@@ -789,16 +832,16 @@ void loop()
                 SerialUSB.write(buff, 11);
                 state = IDLE;
                 break;
-            case 4:
+            case PROTO_SET_DIG_OUT:
                 state = SET_DIG_OUTPUTS;
                 buff[0] = 0xF1;
                 break;
-            case 5:
+            case PROTO_SETUP_CANBUS:
                 state = SETUP_CANBUS;
                 step = 0;
                 buff[0] = 0xF1;
                 break;
-            case 6:
+            case PROTO_GET_CANBUS_PARAMS:
                 //immediately return data on canbus params
                 buff[0] = 0xF1;
                 buff[1] = 6;
@@ -815,7 +858,7 @@ void loop()
                 SerialUSB.write(buff, 12);
                 state = IDLE;
                 break;
-            case 7:
+            case PROTO_GET_DEV_INFO:
                 //immediately return device information
                 buff[0] = 0xF1;
                 buff[1] = 7;
@@ -828,12 +871,12 @@ void loop()
                 SerialUSB.write(buff, 8);
                 state = IDLE;
                 break;
-            case 8:
+            case PROTO_SET_SW_MODE:
                 buff[0] = 0xF1;
                 state = SET_SINGLEWIRE_MODE;
                 step = 0;
                 break;
-            case 9:
+            case PROTO_KEEPALIVE:
                 buff[0] = 0xF1;
                 buff[1] = 0x09;
                 buff[2] = 0xDE;
@@ -841,15 +884,22 @@ void loop()
                 SerialUSB.write(buff, 4);
                 state = IDLE;
                 break;
-            case 10:
+            case PROTO_SET_SYSTYPE:
                 buff[0] = 0xF1;
                 state = SET_SYSTYPE;
                 step = 0;
                 break;
-            case 11:
+            case PROTO_ECHO_CAN_FRAME:
                 state = ECHO_CAN_FRAME;
                 buff[0] = 0xF1;
                 step = 0;
+                break;
+            case PROTO_GET_NUMBUSES:
+                buff[0] = 0xF1;
+                buff[1] = 12;
+                buff[2] = 3; //number of buses actually supported by this hardware (TODO: will be 5 eventually)
+                SerialUSB.write(buff, 3);
+                state = IDLE;
                 break;
             }
             break;
@@ -903,6 +953,7 @@ void loop()
                     */
                     if (out_bus == 0) sendFrame(Can0, build_out_frame);
                     if (out_bus == 1) sendFrame(Can1, build_out_frame);
+                    if (out_bus == 2) sendFrameSW(build_out_frame);
                     /*
                     if (settings.singleWireMode == 1)
                     		   {

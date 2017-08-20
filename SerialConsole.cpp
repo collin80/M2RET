@@ -29,11 +29,17 @@
 #include "SerialConsole.h"
 #include <due_wire.h>
 #include <due_can.h>
+#include <sw_can.h>
+#include <lin_stack.h>
 #include "EEPROM.h"
 #include "config.h"
 #include "sys_io.h"
 
 extern EEPROMCLASS *eeprom;
+extern SWcan SWCAN;
+extern lin_stack LIN1;
+extern lin_stack LIN2;
+extern void CANHandler();
 
 SerialConsole::SerialConsole()
 {
@@ -88,8 +94,17 @@ void SerialConsole::printMenu()
         Logger::console(buff, settings.CAN1Filters[i].id, settings.CAN1Filters[i].mask,
                         settings.CAN1Filters[i].extended, settings.CAN1Filters[i].enabled);
     }
-    Logger::console("CAN0SEND=ID,LEN,<BYTES SEPARATED BY COMMAS> - Ex: C0SEND=0x200,4,1,2,3,4");
-    Logger::console("CAN1SEND=ID,LEN,<BYTES SEPARATED BY COMMAS> - Ex: C1SEND=0x200,8,00,00,00,10,0xAA,0xBB,0xA0,00");
+    
+    SerialUSB.println();
+
+    Logger::console("SWCANEN=%i - Enable/Disable Single Wire CAN (0 = Disable, 1 = Enable)", settings.SWCAN_Enabled);
+    Logger::console("SWCANSPEED=%i - Set speed of Single Wire CAN in baud (33000, 93000, etc)", settings.SWCANSpeed);
+    Logger::console("SWCANLISTENONLY=%i - Enable/Disable Listen Only Mode (0 = Dis, 1 = En)", settings.SWCANListenOnly);
+    SerialUSB.println();
+    
+    Logger::console("CAN0SEND=ID,LEN,<BYTES SEPARATED BY COMMAS> - Ex: CAN0SEND=0x200,4,1,2,3,4");
+    Logger::console("CAN1SEND=ID,LEN,<BYTES SEPARATED BY COMMAS> - Ex: CAN1SEND=0x200,8,00,00,00,10,0xAA,0xBB,0xA0,00");
+    Logger::console("SWSEND=ID,LEN,<BYTES SEPARATED BY COMMAS> - Ex: SWSEND=0x100,4,10,20,30,40");
     Logger::console("MARK=<Description of what you are doing> - Set a mark in the log file about what you are about to do.");
     SerialUSB.println();
 
@@ -344,6 +359,12 @@ void SerialConsole::handleLawicelCmd()
                 Can1.sendFrame(outFrame);                
             }
             if (!stricmp(tokens[1], "SWCAN")) {
+                SWFRAME swFrame;
+                swFrame.id = id;
+                swFrame.length = numBytes;
+                swFrame.extended = false;
+                for (int b = 0; b < numBytes; b++) swFrame.data.bytes[b] = bytes[b];
+                SWCAN.EnqueueTX(swFrame);
             }
             if (!stricmp(tokens[1], "LIN1")) {
             }
@@ -386,7 +407,16 @@ void SerialConsole::handleLawicelCmd()
                     else Can1.setRXFilter(0, filt, mask, false);                
             }
             if (!stricmp(tokens[1], "SWCAN")) {
-                //set mask on SWCan
+                if (!stricmp(tokens[4], "X")) 
+                {
+                    SWCAN.SetRXFilter(0, filt, true);
+                    SWCAN.SetRXMask(0, mask, true);
+                }
+                else 
+                {
+                    SWCAN.SetRXFilter(0, filt, false);
+                    SWCAN.SetRXMask(0, mask, false);
+                }
             }
             if (!stricmp(tokens[1], "LIN1")) {
                 //set mask on LIN. Can you do that?!
@@ -492,21 +522,46 @@ void SerialConsole::handleConfigCmd()
         else Can1.disable();
         settings.CAN1_Enabled = newValue;
         writeEEPROM = true;
+    } else if (cmdString == String("SWCANEN")) {
+        if (newValue < 0) newValue = 0;
+        if (newValue > 1) newValue = 1;
+        Logger::console("Setting SWCAN Enabled to %i", newValue);
+        if (newValue == 1) {
+            SWCAN.setupSW(settings.SWCANSpeed);       
+            delay(20);
+            SWCAN.mode(3); // Go to normal mode. 0 - Sleep, 1 - High Speed, 2 - High Voltage Wake-Up, 3 - Normal
+            attachInterrupt(47, CANHandler, FALLING); //enable interrupt for SWCAN
+        }
+        else {
+            SWCAN.Reset();
+            SWCAN.mode(0); //go to sleep
+        }
+        settings.SWCAN_Enabled = newValue;
+        writeEEPROM = true;        
     } else if (cmdString == String("CAN0SPEED")) {
         if (newValue > 0 && newValue <= 1000000) {
             Logger::console("Setting CAN0 Baud Rate to %i", newValue);
             settings.CAN0Speed = newValue;
-            Can0.begin(settings.CAN0Speed, 255);
+            if (settings.CAN0_Enabled) Can0.begin(settings.CAN0Speed, 255);
             writeEEPROM = true;
         } else Logger::console("Invalid baud rate! Enter a value 1 - 1000000");
     } else if (cmdString == String("CAN1SPEED")) {
         if (newValue > 0 && newValue <= 1000000) {
             Logger::console("Setting CAN1 Baud Rate to %i", newValue);
             settings.CAN1Speed = newValue;
-            Can1.begin(settings.CAN1Speed, 255);
+            if (settings.CAN1_Enabled) Can1.begin(settings.CAN1Speed, 255);
             writeEEPROM = true;
         } else Logger::console("Invalid baud rate! Enter a value 1 - 1000000");
-
+    } else if (cmdString == String("SWCANSPEED")) {
+        if (newValue > 0 && newValue <= 1000000) {
+            Logger::console("Setting Single Wire CAN Baud Rate to %i", newValue);
+            settings.SWCANSpeed = newValue;
+            if (settings.SWCAN_Enabled) 
+            {               
+                SWCAN.setupSW(settings.SWCANSpeed);       
+            }
+            writeEEPROM = true;
+        } else Logger::console("Invalid baud rate! Enter a value 1 - 1000000");
     } else if (cmdString == String("CAN0LISTENONLY")) {
         if (newValue >= 0 && newValue <= 1) {
             Logger::console("Setting CAN0 Listen Only to %i", newValue);
@@ -529,6 +584,17 @@ void SerialConsole::handleConfigCmd()
             }
             writeEEPROM = true;
         } else Logger::console("Invalid setting! Enter a value 0 - 1");
+    } else if (cmdString == String("SWCANLISTENONLY")) {
+        if (newValue >= 0 && newValue <= 1) {
+            Logger::console("Setting SWCAN Listen Only to %i", newValue);
+            settings.SWCANListenOnly = newValue;
+            if (settings.CAN1ListenOnly) {
+                //Can1.enable_autobaud_listen_mode();
+            } else {
+                //Can1.disable_autobaud_listen_mode();
+            }
+            writeEEPROM = true;
+        } else Logger::console("Invalid setting! Enter a value 0 - 1");        
     } else if (cmdString == String("CAN0FILTER0")) { //someone should kick me in the face for this laziness... FIX THIS!
         handleFilterSet(0, 0, newString);
     } else if (cmdString == String("CAN0FILTER1")) {
@@ -565,6 +631,8 @@ void SerialConsole::handleConfigCmd()
         handleCANSend(Can0, newString);
     } else if (cmdString == String("CAN1SEND")) {
         handleCANSend(Can1, newString);
+    } else if (cmdString == String("SWSEND")) {
+        handleSWCANSend(newString);
     } else if (cmdString == String("MARK")) { //just ascii based for now
         if (settings.fileOutputType == GVRET) Logger::file("Mark: %s", newString);
         if (settings.fileOutputType == CRTD) {
@@ -798,6 +866,38 @@ bool SerialConsole::handleCANSend(CANRaw &port, char *inputString)
     else frame.extended = false;
     frame.length = lenVal;
     port.sendFrame(frame);
+    
+    Logger::console("Sending frame with id: 0x%x len: %i", frame.id, frame.length);
+    SysSettings.txToggle = !SysSettings.txToggle;
+    setLED(SysSettings.LED_CANTX, SysSettings.txToggle);
+    return true;
+}
+
+bool SerialConsole::handleSWCANSend(char *inputString)
+{
+    char *idTok = strtok(inputString, ",");
+    char *lenTok = strtok(NULL, ",");
+    char *dataTok;
+    SWFRAME frame;
+
+    if (!idTok) return false;
+    if (!lenTok) return false;
+
+    int idVal = strtol(idTok, NULL, 0);
+    int lenVal = strtol(lenTok, NULL, 0);
+
+    for (int i = 0; i < lenVal; i++) {
+        dataTok = strtok(NULL, ",");
+        if (!dataTok) return false;
+        frame.data.byte[i] = strtol(dataTok, NULL, 0);
+    }
+
+    //things seem good so try to send the frame.
+    frame.id = idVal;
+    if (idVal >= 0x7FF) frame.extended = true;
+    else frame.extended = false;
+    frame.length = lenVal;
+    SWCAN.EnqueueTX(frame);
     Logger::console("Sending frame with id: 0x%x len: %i", frame.id, frame.length);
     SysSettings.txToggle = !SysSettings.txToggle;
     setLED(SysSettings.LED_CANTX, SysSettings.txToggle);
