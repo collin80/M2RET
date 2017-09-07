@@ -31,7 +31,6 @@ SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
  */
 
 #include "ELM327_Emulator.h"
-#include <SamNonDuePin.h>
 
 /*
  * Constructor. Assign serial interface to use for comm with bluetooth adapter we're emulating with
@@ -54,8 +53,6 @@ void ELM327Emu::setup() {
 
     tickCounter = 0;
     ibWritePtr = 0;
-    pinModeNonDue(18, OUTPUT);
-    digitalWriteNonDue(18, LOW);
     serialInterface->begin(115200);
 }
 

@@ -30,6 +30,13 @@ by stimmer
 
 */
 
+
+/*
+ * WARNING - It is very unlikely that any of this code works properly on M2 boards. These routines are a dependency of M2RET for legacy reasons but really
+ * this should be corrected. Don't trust these routines to work properly.
+ */
+
+
 #include "sys_io.h"
 
 #undef HID_ENABLED
@@ -60,7 +67,6 @@ void sys_early_setup()
 
     NumADCSamples = 64;
 
-    //Logger::info("Running on GEVCU 4.x hardware");
     dig[0]=48;
     dig[1]=49;
     dig[2]=50;

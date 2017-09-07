@@ -32,7 +32,6 @@ SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 #include <due_can.h>
 #include <Arduino_Due_SD_HSCMI.h> // This creates the object SD (HSCMI connected sdcard)
 #include <due_wire.h>
-#include <SamNonDuePin.h>
 #include <SPI.h>
 #include <lin_stack.h>
 #include <sw_can.h>
@@ -69,9 +68,7 @@ DigitalCANToggleSettings digToggleSettings;
 //file system on sdcard (HSCMI connected)
 FileStore FS;
 
-//CS = SPI0_nCS3 = B23 = Digital pin 78
-//INT = SWC_nINT = C16 = Digital pin 47
-SWcan SWCAN(78, 47);
+SWcan SWCAN(SPI0_CS3, SWC_INT);
 
 lin_stack LIN1(1, 0); // Sniffer
 lin_stack LIN2(2, 0); // Sniffer
@@ -169,9 +166,9 @@ void loadSettings()
         Logger::console("Running on Macchina M2 hardware");
         SysSettings.useSD = true;
         SysSettings.logToFile = false;
-        SysSettings.LED_CANTX = 12;       //RGB LED - Green channel
-        SysSettings.LED_CANRX = 5;        //RGB LED - Blue Channel
-        SysSettings.LED_LOGGING = 11;     //RGB LED - Red Channel
+        SysSettings.LED_CANTX = RGB_GREEN;
+        SysSettings.LED_CANRX = RGB_BLUE;
+        SysSettings.LED_LOGGING = RGB_RED;
         SysSettings.logToggle = false;
         SysSettings.txToggle = true;
         SysSettings.rxToggle = true;
@@ -180,26 +177,29 @@ void loadSettings()
         SysSettings.lawicellExtendedMode = false;
         SysSettings.lawicelTimestamping = false;
         for (int rx = 0; rx < NUM_BUSES; rx++) SysSettings.lawicelBusReception[rx] = true; //default to showing messages on RX 
-        pinMode(12, OUTPUT);
-        pinMode(5, OUTPUT);
-        pinMode(11, OUTPUT);
-        pinMode(23, OUTPUT); //this and next 4 are 5 LEDs running along top of interface board
-        pinMode(24, OUTPUT);
-        pinMode(27, OUTPUT);
-        pinMode(32, OUTPUT);
-        pinModeNonDue(X0, OUTPUT);
-        digitalWrite(13, LOW); //Mode 0 for SWCAN
-        digitalWriteNonDue(PIN_EMAC_EREFCK, LOW); //Mode 1 for SWCAN
+        //set pin mode for all LEDS
+        pinMode(RGB_GREEN, OUTPUT);
+        pinMode(RGB_RED, OUTPUT);
+        pinMode(RGB_BLUE, OUTPUT);
+        pinMode(DS2, OUTPUT);
+        pinMode(DS3, OUTPUT);
+        pinMode(DS4, OUTPUT);
+        pinMode(DS5, OUTPUT);
+        pinMode(DS6, OUTPUT);
+        
+        digitalWrite(SWC_M0, LOW); //Mode 0 for SWCAN
+        digitalWrite(SWC_M1, LOW); //mode 1
+        
         //Set RGB LED to completely off.
-        digitalWrite(12, HIGH);
-        digitalWrite(11, HIGH);
-        digitalWrite(5, HIGH);
-        //Now set 5 LED panel to all off
-        digitalWrite(23, HIGH);
-        digitalWrite(24, HIGH);
-        digitalWrite(27, HIGH);
-        digitalWrite(32, HIGH);
-        digitalWriteNonDue(X0, HIGH);
+        digitalWrite(RGB_GREEN, HIGH);
+        digitalWrite(RGB_BLUE, HIGH);
+        digitalWrite(RGB_RED, HIGH);
+        digitalWrite(DS2, HIGH);
+        digitalWrite(DS3, HIGH);
+        digitalWrite(DS4, HIGH);
+        digitalWrite(DS5, HIGH);
+        digitalWrite(DS6, HIGH);
+        
         setSWCANSleep();
 //        break;
 //    }
@@ -235,8 +235,9 @@ void setSWCANWakeup()
 
 void setup()
 {
-    pinModeNonDue(18, OUTPUT);
-    digitalWriteNonDue(18, LOW);
+    //TODO: I don't remember why these two lines are here... anyone know?
+    pinMode(XBEE_PWM, OUTPUT);
+    digitalWrite(XBEE_PWM, LOW);
 
     //delay(5000); //just for testing. Don't use in production
 
@@ -321,7 +322,7 @@ void setup()
         SWCAN.setupSW(settings.SWCANSpeed);       
         delay(20);
         SWCAN.mode(3); // Go to normal mode. 0 - Sleep, 1 - High Speed, 2 - High Voltage Wake-Up, 3 - Normal
-        attachInterrupt(47, CANHandler, FALLING); //enable interrupt for SWCAN
+        attachInterrupt(SWC_INT, CANHandler, FALLING); //enable interrupt for SWCAN
         SerialUSB.print("Enabled SWCAN with speed ");
         SerialUSB.println(settings.SWCANSpeed);
     }
@@ -451,20 +452,20 @@ void toggleTXLED()
 void updateBusloadLED(uint8_t perc)
 {
     Logger::debug("Busload: %i", perc);
-    if (perc > 0) digitalWrite(23, LOW);
-    else digitalWrite(23, HIGH);
+    if (perc > 0) digitalWrite(DS6, LOW);
+    else digitalWrite(DS6, HIGH);
 
-    if (perc >= 14) digitalWrite(24, LOW);
-    else digitalWrite(24, HIGH);
+    if (perc >= 14) digitalWrite(DS5, LOW);
+    else digitalWrite(DS5, HIGH);
 
-    if (perc >= 30) digitalWrite(27, LOW);
-    else digitalWrite(27, HIGH);
+    if (perc >= 30) digitalWrite(DS4, LOW);
+    else digitalWrite(DS4, HIGH);
 
-    if (perc >= 53) digitalWriteNonDue(X0, LOW);
-    else digitalWriteNonDue(X0, HIGH);
+    if (perc >= 53) digitalWrite(DS3, LOW);
+    else digitalWrite(DS3, HIGH);
 
-    if (perc >= 80) digitalWrite(32, LOW);
-    else digitalWrite(32, HIGH);
+    if (perc >= 80) digitalWrite(DS2, LOW);
+    else digitalWrite(DS2, HIGH);
 }
 
 void sendFrameToUSB(CAN_FRAME &frame, int whichBus)
@@ -703,7 +704,7 @@ void loop()
 
     //if (!SysSettings.lawicelMode || SysSettings.lawicelAutoPoll || SysSettings.lawicelPollCounter > 0)
     //{
-    if (Can0.available()) {
+    if (Can0.available() > 0) {
         Can0.read(incoming);
         addBits(0, incoming);
         toggleRXLED();
@@ -712,7 +713,7 @@ void loop()
         if (digToggleSettings.enabled && (digToggleSettings.mode & 1) && (digToggleSettings.mode & 2)) processDigToggleFrame(incoming);
     }
 
-    if (Can1.available()) {
+    if (Can1.available() > 0) {
         Can1.read(incoming);
         addBits(1, incoming);
         toggleRXLED();
