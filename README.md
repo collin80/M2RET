@@ -10,15 +10,13 @@ A fork of the GVRET project.
 You will need the following to be able to compile the run this project:
 
 - [Arduino IDE](https://www.arduino.cc/en/Main/Software) 1.5.4 or higher (tested all of the way up to 1.6.12)
+- [M2 Board Files] (https://github.com/macchina/arduino-boards-sam) - Needed to define the pins for various hardware
 - [due_can](https://github.com/collin80/due_can) - Object oriented canbus library for Arduino Due compatible boards.
 - [due_wire](https://github.com/collin80/due_wire) - An alternative I2C library for Due with DMA support.
-- [Arduino_Due_SD_HSCMI](https://github.com/collin80/Arduino_Due_SD_HSCMI) - SD card support library
+- [Arduino_Due_SD_HSCMI](https://github.com/macchina/Arduino_Due_SD_HSMCI) - SD card support library
 - [SD_HSCMI](https://github.com/collin80/SD_HSCMI) - Another SD support library
-- [LIN](https://github.com/collin80/LIN) - Support for the dual LIN ports on the M2
-- [SamNonDuePin](https://github.com/collin80/SamNonDuePin) - Allows access to pins not mapped on standard Arduino Due boards
+- [LIN](https://github.com/macchina/LIN) - Support for the dual LIN ports on the M2
 - [SW_CAN](https://github.com/collin80/SW_CAN) - Single wire CAN support for M2 board
-
-Note, the last five libraries are all copied from https://github.com/macchina/m2-libraries but have been modified. You will need the versions found above in order to compile the M2RET firmware yourself.
 
 All libraries belong in %USERPROFILE%\Documents\Arduino\libraries (Windows) or ~/Arduino/libraries (Linux/Mac).
 You will need to remove -master or any other postfixes. Your library folders should be named as above.
@@ -31,7 +29,7 @@ The canbus is supposed to be terminated on both ends of the bus. This should not
 - Text console is active (configuration and CAN capture display)
 - Can connect as a GVRET device with SavvyCAN
 - Able to automatically start up and log all traffic to sdCard. Not stable at high bus loads just yet.
-- LAWICEL support (very basic)
+- LAWICEL support (somewhat tested. Still experimental)
 - Blinken Lights!
 
 #### What does not work:
