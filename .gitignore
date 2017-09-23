@@ -27,3 +27,9 @@
 *.exe
 *.out
 *.app
+/M2RET.sln
+/M2RET.vcxproj
+/M2RET.vcxproj.filters
+/.vs/M2RET/v14/.suo
+/Debug
+/__vm

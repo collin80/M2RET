@@ -5,6 +5,9 @@
  *
  * Created: 3/23/2017
  *  Author: Collin Kidder
+ *	Updated
+ *		Tony Doust
+ *			Added
  */
 
 /*
@@ -54,6 +57,87 @@ void ELM327Emu::setup() {
     tickCounter = 0;
     ibWritePtr = 0;
     serialInterface->begin(115200);
+
+    // !!!!!! Changes
+    pinMode(ELM_TX, OUTPUT);
+    digitalWrite(ELM_TX, LOW);
+    Serial.begin(115200);	// XBEE Serial speed
+                            //	serialInterface->begin(115200);	// XBEE Serial speed
+
+    pinMode(XBEE_Reset, OUTPUT);	// XBEE reset pin
+    digitalWrite(XBEE_Reset, HIGH);
+
+    pinMode(XBEE_Program, OUTPUT);	// XBEE Boot Pin
+    digitalWrite(XBEE_Program, HIGH);
+
+    // reboot ESP32 on startup
+    // Imperative to reset ESP32 Module in startup otherwiswe Communications with ESP32 will fail
+    digitalWrite(XBEE_Reset, LOW);
+    delay(500);	// Wait for XBEE module to reboot
+    digitalWrite(XBEE_Reset, HIGH);
+
+    /// !!!!! Changes
+}
+
+/*
+* Test if M2 WIFI/BTE module exists
+*	\param NIL
+*	\return bool True = M2BTE/WIFI present
+*/
+bool ELM327Emu::testHardware(){
+    int incoming = 0;
+    // reboot ESP32
+    digitalWrite(XBEE_Program, HIGH);	// Ensure XBEE Module is not in Programming mode
+    digitalWrite(XBEE_Reset, LOW);		// Reset the XBEE module
+                                        //	digitalWrite(XBEE_Program, LOW);	// Place the WIFI module in boot mode
+    delay(500);							// give the XBEE module time to reboot
+    digitalWrite(XBEE_Reset, HIGH);
+
+    /*
+    while(Serial.available()){	// This prints all of the data returned from the M2WiFI module
+    SerialUSB.write((uint8_t) Serial.read());
+    SerialUSB.flush();
+    }
+    */
+    while(Serial.available()){	// get the returned data from the XBEE interface
+                                //	while(Serial.available() > 0){	// get the returned data from the XBEE interface
+                                //		SerialUSB.print((uint8_t) Serial.read());	// This passes Binary
+        SerialUSB.write((uint8_t) serialInterface->read());	// This passes Printable ASCII
+        SerialUSB.flush();
+
+        //		incoming = serialInterface->read();
+        //		incoming = Serial.read();
+
+        if(incoming != -1){ //and there is no reason it should be -1
+            if(incoming == 13 || ibWritePtr > 126){ // on CR or full buffer, process the line
+                incomingBuffer[ibWritePtr] = 0; //null terminate the string
+                ibWritePtr = 0; //reset the pointer to the beginning of the buffer
+                char temp[6];
+                for(int i = 0; i<6; i++){
+                    temp[i] = (char) incomingBuffer[i];
+                }
+                temp[5] = 0; //null terminate the string
+                if((strcmp(temp, "ets") || strcmp(temp, "esp32")) == 1){
+                    if(strcmp(temp, "ets") == 1){
+                        temp[3] = 0; //null terminate the string
+                    }
+                    SerialUSB.write(incomingBuffer);
+                    SerialUSB.write("\n");
+                    SerialUSB.write(temp);
+                    return true;	// M2 WIFI Module exists
+                } else{	// port speed may be wrong try changing speed
+
+                }
+            } else{ // add more characters
+                if(incoming != 10 && incoming != ' '){ // don't add a LF character or spaces. Strip them right out
+                    incomingBuffer[ibWritePtr++] = (char) tolower(incoming); //force lowercase to make processing easier
+                }
+            }
+        } else{
+            return false;
+        }
+    }
+    return false;
 }
 
 /*
@@ -72,7 +156,6 @@ void ELM327Emu::sendCmd(String cmd) {
  * until we get 13 (CR) and then process it.
  * But, for now just echo stuff to our serial port for debugging
  */
-
 void ELM327Emu::loop() {
     int incoming;
     while (serialInterface->available()) {

@@ -29,7 +29,7 @@
 #include "sys_io.h"
 #include <due_wire.h>
 #include "EEPROM.h"
-#include <Arduino_Due_SD_HSCMI.h>
+#include <Arduino_Due_SD_HSMCI.h>
 
 Logger::LogLevel Logger::logLevel = Logger::Info;
 uint32_t Logger::lastLogTime = 0;

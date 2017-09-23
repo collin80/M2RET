@@ -30,7 +30,7 @@ SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 #include "M2RET.h"
 #include "config.h"
 #include <due_can.h>
-#include <Arduino_Due_SD_HSCMI.h> // This creates the object SD (HSCMI connected sdcard)
+#include <Arduino_Due_SD_HSMCI.h> // This creates the object SD (HSCMI connected sdcard)
 #include <due_wire.h>
 #include <SPI.h>
 #include <lin_stack.h>
@@ -68,7 +68,7 @@ DigitalCANToggleSettings digToggleSettings;
 //file system on sdcard (HSCMI connected)
 FileStore FS;
 
-SWcan SWCAN(SPI0_CS3, SWC_INT);
+SWcan SWCAN(SWCan_Chip_Select, SWCan_Interrupt);
 
 lin_stack LIN1(1, 0); // Sniffer
 lin_stack LIN2(2, 0); // Sniffer
@@ -76,6 +76,7 @@ lin_stack LIN2(2, 0); // Sniffer
 ELM327Emu elmEmulator;
 
 SerialConsole console;
+bool m2WirelessInstalled = false;
 
 bool digTogglePinState;
 uint8_t digTogglePinCounter;
@@ -166,9 +167,9 @@ void loadSettings()
         Logger::console("Running on Macchina M2 hardware");
         SysSettings.useSD = true;
         SysSettings.logToFile = false;
-        SysSettings.LED_CANTX = RGB_GREEN;
-        SysSettings.LED_CANRX = RGB_BLUE;
-        SysSettings.LED_LOGGING = RGB_RED;
+        SysSettings.LED_CANTX = RGB_Green_Led;
+        SysSettings.LED_CANRX = RGB_Blue_Led;
+        SysSettings.LED_LOGGING = RGB_Red_Led;
         SysSettings.logToggle = false;
         SysSettings.txToggle = true;
         SysSettings.rxToggle = true;
@@ -178,27 +179,27 @@ void loadSettings()
         SysSettings.lawicelTimestamping = false;
         for (int rx = 0; rx < NUM_BUSES; rx++) SysSettings.lawicelBusReception[rx] = true; //default to showing messages on RX 
         //set pin mode for all LEDS
-        pinMode(RGB_GREEN, OUTPUT);
-        pinMode(RGB_RED, OUTPUT);
-        pinMode(RGB_BLUE, OUTPUT);
-        pinMode(DS2, OUTPUT);
-        pinMode(DS3, OUTPUT);
-        pinMode(DS4, OUTPUT);
-        pinMode(DS5, OUTPUT);
-        pinMode(DS6, OUTPUT);
+        pinMode(RGB_Green_Led, OUTPUT);
+        pinMode(RGB_Red_Led, OUTPUT);
+        pinMode(RGB_Blue_Led, OUTPUT);
+        pinMode(Red_Led, OUTPUT);
+        pinMode(Yellow_Led1, OUTPUT);
+        pinMode(Yellow_Led2, OUTPUT);
+        pinMode(Yellow_Led3, OUTPUT);
+        pinMode(Green_Led, OUTPUT);
         
-        digitalWrite(SWC_M0, LOW); //Mode 0 for SWCAN
-        digitalWrite(SWC_M1, LOW); //mode 1
+        digitalWrite(SWCan_Mod0_Pin, LOW); //Mode 0 for SWCAN
+        digitalWrite(SWCan_Mod1_Pin, LOW); //mode 1
         
         //Set RGB LED to completely off.
-        digitalWrite(RGB_GREEN, HIGH);
-        digitalWrite(RGB_BLUE, HIGH);
-        digitalWrite(RGB_RED, HIGH);
-        digitalWrite(DS2, HIGH);
-        digitalWrite(DS3, HIGH);
-        digitalWrite(DS4, HIGH);
-        digitalWrite(DS5, HIGH);
-        digitalWrite(DS6, HIGH);
+        digitalWrite(RGB_Green_Led, HIGH);
+        digitalWrite(RGB_Blue_Led, HIGH);
+        digitalWrite(RGB_Red_Led, HIGH);
+        digitalWrite(Red_Led, HIGH);
+        digitalWrite(Yellow_Led1, HIGH);
+        digitalWrite(Yellow_Led2, HIGH);
+        digitalWrite(Yellow_Led3, HIGH);
+        digitalWrite(Green_Led, HIGH);
         
         setSWCANSleep();
 //        break;
@@ -322,7 +323,7 @@ void setup()
         SWCAN.setupSW(settings.SWCANSpeed);       
         delay(20);
         SWCAN.mode(3); // Go to normal mode. 0 - Sleep, 1 - High Speed, 2 - High Voltage Wake-Up, 3 - Normal
-        attachInterrupt(SWC_INT, CANHandler, FALLING); //enable interrupt for SWCAN
+        attachInterrupt(SWCan_Interrupt, CANHandler, FALLING); //enable interrupt for SWCAN
         SerialUSB.print("Enabled SWCAN with speed ");
         SerialUSB.println(settings.SWCANSpeed);
     }
@@ -352,6 +353,31 @@ void setup()
     SysSettings.lawicelPollCounter = 0;
     
     //elmEmulator.setup();
+    m2WirelessInstalled = elmEmulator.testHardware();
+    //	digitalWrite(XBEE_Program, HIGH);	// Ensure XBEE Module is not in Programming mode
+    //	digitalWrite(XBEE_Reset, LOW);	// Reset the XBEE module
+    //	delay(500);
+    //	digitalWrite(XBEE_Reset, HIGH);	// Return the pin to normal mode
+    if(m2WirelessInstalled){
+        SerialUSB.print("\n ** M2 WIFI Module Installed **\n\n");
+    } else{
+        SerialUSB.print("\n ** M2 WIFI Module Not Installed **\n\n");
+    }
+    // ******************************** //
+    //		Debug ELM327 setup			//
+    /*
+    if(elmEmulator.testHardware()){
+    SerialUSB.print(" WIFI Exists\n");
+    }else{
+    if(elmEmulator.testHardware()){	// try it one more time to be sure
+    SerialUSB.print(" WIFI Exists Second Test\n");
+    }else{
+    SerialUSB.print("WIFI Module Not Installed\n");
+    }
+    }
+    */
+    // ********************************	//
+
 
     SerialUSB.print("Done with init\n");
 }
@@ -452,20 +478,20 @@ void toggleTXLED()
 void updateBusloadLED(uint8_t perc)
 {
     Logger::debug("Busload: %i", perc);
-    if (perc > 0) digitalWrite(DS6, LOW);
-    else digitalWrite(DS6, HIGH);
+    if (perc > 0) digitalWrite(Green_Led, LOW);
+    else digitalWrite(Green_Led, HIGH);
 
-    if (perc >= 14) digitalWrite(DS5, LOW);
-    else digitalWrite(DS5, HIGH);
+    if (perc >= 14) digitalWrite(Yellow_Led3, LOW);
+    else digitalWrite(Yellow_Led3, HIGH);
 
-    if (perc >= 30) digitalWrite(DS4, LOW);
-    else digitalWrite(DS4, HIGH);
+    if (perc >= 30) digitalWrite(Yellow_Led2, LOW);
+    else digitalWrite(Yellow_Led2, HIGH);
 
-    if (perc >= 53) digitalWrite(DS3, LOW);
-    else digitalWrite(DS3, HIGH);
+    if (perc >= 53) digitalWrite(Yellow_Led1, LOW);
+    else digitalWrite(Yellow_Led1, HIGH);
 
-    if (perc >= 80) digitalWrite(DS2, LOW);
-    else digitalWrite(DS2, HIGH);
+    if (perc >= 80) digitalWrite(Red_Led, LOW);
+    else digitalWrite(Red_Led, HIGH);
 }
 
 void sendFrameToUSB(CAN_FRAME &frame, int whichBus)
@@ -773,7 +799,7 @@ void loop()
         serialCnt++;
         in_byte = SerialUSB.read();
         switch (state) {
-        case IDLE:
+        case IDLE:{
             if (in_byte == 0xF1) state = GET_COMMAND;
             else if (in_byte == 0xE7) {
                 settings.useBinarySerialComm = true;
@@ -783,200 +809,224 @@ void loop()
                 console.rcvCharacter((uint8_t)in_byte);
             }
             break;
-        case GET_COMMAND:
-            switch (in_byte) {
-            case PROTO_BUILD_CAN_FRAME:
-                state = BUILD_CAN_FRAME;
-                buff[0] = 0xF1;
-                step = 0;
-                break;
-            case PROTO_TIME_SYNC:
-                state = TIME_SYNC;
-                step = 0;
-                buff[0] = 0xF1;
-                buff[1] = 1; //time sync
-                buff[2] = (uint8_t)(now & 0xFF);
-                buff[3] = (uint8_t)(now >> 8);
-                buff[4] = (uint8_t)(now >> 16);
-                buff[5] = (uint8_t)(now >> 24);
-                SerialUSB.write(buff, 6);
-                break;
-            case PROTO_DIG_INPUTS:
-                //immediately return the data for digital inputs
-                temp8 = getDigital(0) + (getDigital(1) << 1) + (getDigital(2) << 2) + (getDigital(3) << 3);
-                buff[0] = 0xF1;
-                buff[1] = 2; //digital inputs
-                buff[2] = temp8;
-                temp8 = checksumCalc(buff, 2);
-                buff[3] = temp8;
-                SerialUSB.write(buff, 4);
-                state = IDLE;
-                break;
-            case PROTO_ANA_INPUTS:
-                //immediately return data on analog inputs
-                temp16 = getAnalog(0);
-                buff[0] = 0xF1;
-                buff[1] = 3;
-                buff[2] = temp16 & 0xFF;
-                buff[3] = uint8_t(temp16 >> 8);
-                temp16 = getAnalog(1);
-                buff[4] = temp16 & 0xFF;
-                buff[5] = uint8_t(temp16 >> 8);
-                temp16 = getAnalog(2);
-                buff[6] = temp16 & 0xFF;
-                buff[7] = uint8_t(temp16 >> 8);
-                temp16 = getAnalog(3);
-                buff[8] = temp16 & 0xFF;
-                buff[9] = uint8_t(temp16 >> 8);
-                temp8 = checksumCalc(buff, 9);
-                buff[10] = temp8;
-                SerialUSB.write(buff, 11);
-                state = IDLE;
-                break;
-            case PROTO_SET_DIG_OUT:
-                state = SET_DIG_OUTPUTS;
-                buff[0] = 0xF1;
-                break;
-            case PROTO_SETUP_CANBUS:
-                state = SETUP_CANBUS;
-                step = 0;
-                buff[0] = 0xF1;
-                break;
-            case PROTO_GET_CANBUS_PARAMS:
-                //immediately return data on canbus params
-                buff[0] = 0xF1;
-                buff[1] = 6;
-                buff[2] = settings.CAN0_Enabled + ((unsigned char)settings.CAN0ListenOnly << 4);
-                buff[3] = settings.CAN0Speed;
-                buff[4] = settings.CAN0Speed >> 8;
-                buff[5] = settings.CAN0Speed >> 16;
-                buff[6] = settings.CAN0Speed >> 24;
-                buff[7] = settings.CAN1_Enabled + ((unsigned char)settings.CAN1ListenOnly << 4); //+ (unsigned char)settings.singleWireMode << 6;
-                buff[8] = settings.CAN1Speed;
-                buff[9] = settings.CAN1Speed >> 8;
-                buff[10] = settings.CAN1Speed >> 16;
-                buff[11] = settings.CAN1Speed >> 24;
-                SerialUSB.write(buff, 12);
-                state = IDLE;
-                break;
-            case PROTO_GET_DEV_INFO:
-                //immediately return device information
-                buff[0] = 0xF1;
-                buff[1] = 7;
-                buff[2] = CFG_BUILD_NUM & 0xFF;
-                buff[3] = (CFG_BUILD_NUM >> 8);
-                buff[4] = EEPROM_VER;
-                buff[5] = (unsigned char)settings.fileOutputType;
-                buff[6] = (unsigned char)settings.autoStartLogging;
-                buff[7] = 0; //was single wire mode. Should be rethought for this board.
-                SerialUSB.write(buff, 8);
-                state = IDLE;
-                break;
-            case PROTO_SET_SW_MODE:
-                buff[0] = 0xF1;
-                state = SET_SINGLEWIRE_MODE;
-                step = 0;
-                break;
-            case PROTO_KEEPALIVE:
-                buff[0] = 0xF1;
-                buff[1] = 0x09;
-                buff[2] = 0xDE;
-                buff[3] = 0xAD;
-                SerialUSB.write(buff, 4);
-                state = IDLE;
-                break;
-            case PROTO_SET_SYSTYPE:
-                buff[0] = 0xF1;
-                state = SET_SYSTYPE;
-                step = 0;
-                break;
-            case PROTO_ECHO_CAN_FRAME:
-                state = ECHO_CAN_FRAME;
-                buff[0] = 0xF1;
-                step = 0;
-                break;
-            case PROTO_GET_NUMBUSES:
-                buff[0] = 0xF1;
-                buff[1] = 12;
-                buff[2] = 3; //number of buses actually supported by this hardware (TODO: will be 5 eventually)
-                SerialUSB.write(buff, 3);
-                state = IDLE;
-                break;
             }
-            break;
-        case BUILD_CAN_FRAME:
-            buff[1 + step] = in_byte;
-            switch (step) {
-            case 0:
-                build_out_frame.id = in_byte;
-                break;
-            case 1:
-                build_out_frame.id |= in_byte << 8;
-                break;
-            case 2:
-                build_out_frame.id |= in_byte << 16;
-                break;
-            case 3:
-                build_out_frame.id |= in_byte << 24;
-                if (build_out_frame.id & 1 << 31) {
-                    build_out_frame.id &= 0x7FFFFFFF;
-                    build_out_frame.extended = true;
-                } else build_out_frame.extended = false;
-                break;
-            case 4:
-                out_bus = in_byte & 1;
-                break;
-            case 5:
-                build_out_frame.length = in_byte & 0xF;
-                if (build_out_frame.length > 8) build_out_frame.length = 8;
-                break;
-            default:
-                if (step < build_out_frame.length + 6) {
-                    build_out_frame.data.bytes[step - 6] = in_byte;
-                } else {
-                    state = IDLE;
-                    //this would be the checksum byte. Compute and compare.
-                    temp8 = checksumCalc(buff, step);
-                    //if (temp8 == in_byte)
-                    //{
-                    /*
-                    if (settings.singleWireMode == 1)
-                    {
-                       if (build_out_frame.id == 0x100)
-                       {
-                    	   if (out_bus == 1)
-                    	   {
-                    		   setSWCANWakeup();
-                    		   delay(5);
-                    	   }
-                       }
-                    }
-                    */
-                    if (out_bus == 0) sendFrame(Can0, build_out_frame);
-                    if (out_bus == 1) sendFrame(Can1, build_out_frame);
-                    if (out_bus == 2) sendFrameSW(build_out_frame);
-                    /*
-                    if (settings.singleWireMode == 1)
-                    		   {
-                    			   if (build_out_frame.id == 0x100)
-                    			   {
-                    				   if (out_bus == 1)
-                    				   {
-                    					   delay(5);
-                    					   setSWCANEnabled();
-                    				   }
-                    			   }
-                    		   } */
-                    //}
+        case GET_COMMAND:{
+                switch(in_byte){
+                    case PROTO_BUILD_CAN_FRAME:{
+                            state = BUILD_CAN_FRAME;
+                            buff[0] = 0xF1;
+                            step = 0;
+                            break;
+                        }
+                    case PROTO_TIME_SYNC:{
+                            state = TIME_SYNC;
+                            step = 0;
+                            buff[0] = 0xF1;
+                            buff[1] = 1; //time sync
+                            buff[2] = (uint8_t) (now & 0xFF);
+                            buff[3] = (uint8_t) (now >> 8);
+                            buff[4] = (uint8_t) (now >> 16);
+                            buff[5] = (uint8_t) (now >> 24);
+                            SerialUSB.write(buff, 6);
+                            break;
+                        }
+                    case PROTO_DIG_INPUTS:{
+                            //immediately return the data for digital inputs
+                            temp8 = getDigital(0) + (getDigital(1) << 1) + (getDigital(2) << 2) + (getDigital(3) << 3);
+                            buff[0] = 0xF1;
+                            buff[1] = 2; //digital inputs
+                            buff[2] = temp8;
+                            temp8 = checksumCalc(buff, 2);
+                            buff[3] = temp8;
+                            SerialUSB.write(buff, 4);
+                            state = IDLE;
+                            break;
+                        }
+                    case PROTO_ANA_INPUTS:{
+                            //immediately return data on analog inputs
+                            temp16 = getAnalog(0);
+                            buff[0] = 0xF1;
+                            buff[1] = 3;
+                            buff[2] = temp16 & 0xFF;
+                            buff[3] = uint8_t(temp16 >> 8);
+                            temp16 = getAnalog(1);
+                            buff[4] = temp16 & 0xFF;
+                            buff[5] = uint8_t(temp16 >> 8);
+                            temp16 = getAnalog(2);
+                            buff[6] = temp16 & 0xFF;
+                            buff[7] = uint8_t(temp16 >> 8);
+                            temp16 = getAnalog(3);
+                            buff[8] = temp16 & 0xFF;
+                            buff[9] = uint8_t(temp16 >> 8);
+                            temp8 = checksumCalc(buff, 9);
+                            buff[10] = temp8;
+                            SerialUSB.write(buff, 11);
+                            state = IDLE;
+                            break;
+                        }
+                    case PROTO_SET_DIG_OUT:{
+                            state = SET_DIG_OUTPUTS;
+                            buff[0] = 0xF1;
+                            break;
+                        }
+                    case PROTO_SETUP_CANBUS:{
+                            state = SETUP_CANBUS;
+                            step = 0;
+                            buff[0] = 0xF1;
+                            break;
+                        }
+                    case PROTO_GET_CANBUS_PARAMS:{
+                            //immediately return data on canbus params
+                            buff[0] = 0xF1;
+                            buff[1] = 6;
+                            buff[2] = settings.CAN0_Enabled + ((unsigned char) settings.CAN0ListenOnly << 4);
+                            buff[3] = settings.CAN0Speed;
+                            buff[4] = settings.CAN0Speed >> 8;
+                            buff[5] = settings.CAN0Speed >> 16;
+                            buff[6] = settings.CAN0Speed >> 24;
+                            buff[7] = settings.CAN1_Enabled + ((unsigned char) settings.CAN1ListenOnly << 4); //+ (unsigned char)settings.singleWireMode << 6;
+                            buff[8] = settings.CAN1Speed;
+                            buff[9] = settings.CAN1Speed >> 8;
+                            buff[10] = settings.CAN1Speed >> 16;
+                            buff[11] = settings.CAN1Speed >> 24;
+                            SerialUSB.write(buff, 12);
+                            state = IDLE;
+                            break;
+                        }
+                    case PROTO_GET_DEV_INFO:{
+                            //immediately return device information
+                            buff[0] = 0xF1;
+                            buff[1] = 7;
+                            buff[2] = CFG_BUILD_NUM & 0xFF;
+                            buff[3] = (CFG_BUILD_NUM >> 8);
+                            buff[4] = EEPROM_VER;
+                            buff[5] = (unsigned char) settings.fileOutputType;
+                            buff[6] = (unsigned char) settings.autoStartLogging;
+                            buff[7] = 0; //was single wire mode. Should be rethought for this board.
+                            SerialUSB.write(buff, 8);
+                            state = IDLE;
+                            break;
+                        }
+                    case PROTO_SET_SW_MODE:{
+                            buff[0] = 0xF1;
+                            state = SET_SINGLEWIRE_MODE;
+                            step = 0;
+                            break;
+                        }
+                    case PROTO_KEEPALIVE:{
+                            buff[0] = 0xF1;
+                            buff[1] = 0x09;
+                            buff[2] = 0xDE;
+                            buff[3] = 0xAD;
+                            SerialUSB.write(buff, 4);
+                            state = IDLE;
+                            break;
+                        }
+                    case PROTO_SET_SYSTYPE:{
+                            buff[0] = 0xF1;
+                            state = SET_SYSTYPE;
+                            step = 0;
+                            break;
+                        }
+                    case PROTO_ECHO_CAN_FRAME:{
+                            state = ECHO_CAN_FRAME;
+                            buff[0] = 0xF1;
+                            step = 0;
+                            break;
+                        }
+                    case PROTO_GET_NUMBUSES:{
+                            buff[0] = 0xF1;
+                            buff[1] = 12;
+                            buff[2] = 3; //number of buses actually supported by this hardware (TODO: will be 5 eventually)
+                            SerialUSB.write(buff, 3);
+                            state = IDLE;
+                            break;
+                        }
                 }
                 break;
             }
-            step++;
-            break;
-        case TIME_SYNC:
+        case BUILD_CAN_FRAME:{
+                buff[1 + step] = in_byte;
+                switch(step){
+                    case 0:{
+                            build_out_frame.id = in_byte;
+                            break;
+                        }
+                    case 1:{
+                            build_out_frame.id |= in_byte << 8;
+                            break;
+                        }
+                    case 2:{
+                            build_out_frame.id |= in_byte << 16;
+                            break;
+                        }
+                    case 3:{
+                            build_out_frame.id |= in_byte << 24;
+                            if(build_out_frame.id & 1 << 31){
+                                build_out_frame.id &= 0x7FFFFFFF;
+                                build_out_frame.extended = true;
+                            } else build_out_frame.extended = false;
+                            break;
+                        }
+                    case 4:{
+                            out_bus = in_byte & 1;
+                            break;
+                        }
+                    case 5:{
+                            build_out_frame.length = in_byte & 0xF;
+                            if(build_out_frame.length > 8) build_out_frame.length = 8;
+                            break;
+                        }
+                    default:{
+                            if(step < build_out_frame.length + 6){
+                                build_out_frame.data.bytes[step - 6] = in_byte;
+                            } else{
+                                state = IDLE;
+                                //this would be the checksum byte. Compute and compare.
+                                temp8 = checksumCalc(buff, step);
+                                //if (temp8 == in_byte)
+                                //{
+                                /*
+                                if (settings.singleWireMode == 1)
+                                {
+                                if (build_out_frame.id == 0x100)
+                                {
+                                if (out_bus == 1)
+                                {
+                                setSWCANWakeup();
+                                delay(5);
+                                }
+                                }
+                                }
+                                */
+                                if(out_bus == 0) sendFrame(Can0, build_out_frame);
+                                if(out_bus == 1) sendFrame(Can1, build_out_frame);
+                                if(out_bus == 2) sendFrameSW(build_out_frame);
+                                /*
+                                if (settings.singleWireMode == 1)
+                                {
+                                if (build_out_frame.id == 0x100)
+                                {
+                                if (out_bus == 1)
+                                {
+                                delay(5);
+                                setSWCANEnabled();
+                                }
+                                }
+                                } */
+                                //}
+                            }
+                            break;
+                        }
+                }
+                step++;
+                break;
+            }
+        case TIME_SYNC:{
             state = IDLE;
             break;
-        case SET_DIG_OUTPUTS: //todo: validate the XOR byte
+            }
+        case SET_DIG_OUTPUTS:{ //todo: validate the XOR byte
             buff[1] = in_byte;
             //temp8 = checksumCalc(buff, 2);
             for (int c = 0; c < 8; c++) {
@@ -985,154 +1035,174 @@ void loop()
             }
             state = IDLE;
             break;
-        case SETUP_CANBUS: //todo: validate checksum
-            switch (step) {
-            case 0:
-                build_int = in_byte;
-                break;
-            case 1:
-                build_int |= in_byte << 8;
-                break;
-            case 2:
-                build_int |= in_byte << 16;
-                break;
-            case 3:
-                build_int |= in_byte << 24;
-                if (build_int > 0) {
-                    if (build_int & 0x80000000) { //signals that enabled and listen only status are also being passed
-                        if (build_int & 0x40000000) {
-                            settings.CAN0_Enabled = true;
-                            Can0.enable();
-                        } else {
-                            settings.CAN0_Enabled = false;
-                            Can0.disable();
+            }
+        case SETUP_CANBUS:{ //todo: validate checksum
+                switch(step){
+                    case 0:{
+                            build_int = in_byte;
+                            break;
                         }
-                        if (build_int & 0x20000000) {
-                            settings.CAN0ListenOnly = true;
-                            Can0.enable_autobaud_listen_mode();
-                        } else {
-                            settings.CAN0ListenOnly = false;
-                            Can0.disable_autobaud_listen_mode();
+                    case 1:{
+                            build_int |= in_byte << 8;
+                            break;
                         }
-                    } else {
-                        Can0.enable(); //if not using extended status mode then just default to enabling - this was old behavior
-                        settings.CAN0_Enabled = true;
-                    }
-                    build_int = build_int & 0xFFFFF;
-                    if (build_int > 1000000) build_int = 1000000;
-                    Can0.begin(build_int, 255);
-                    //Can0.set_baudrate(build_int);
-                    settings.CAN0Speed = build_int;
-                } else { //disable first canbus
-                    Can0.disable();
-                    settings.CAN0_Enabled = false;
-                }
-                break;
-            case 4:
-                build_int = in_byte;
-                break;
-            case 5:
-                build_int |= in_byte << 8;
-                break;
-            case 6:
-                build_int |= in_byte << 16;
-                break;
-            case 7:
-                build_int |= in_byte << 24;
-                if (build_int > 0) {
-                    if (build_int & 0x80000000) { //signals that enabled and listen only status are also being passed
-                        if (build_int & 0x40000000) {
-                            settings.CAN1_Enabled = true;
-                            Can1.enable();
-                        } else {
-                            settings.CAN1_Enabled = false;
-                            Can1.disable();
+                    case 2:{
+                            build_int |= in_byte << 16;
+                            break;
                         }
-                        if (build_int & 0x20000000) {
-                            settings.CAN1ListenOnly = true;
-                            Can1.enable_autobaud_listen_mode();
-                        } else {
-                            settings.CAN1ListenOnly = false;
-                            Can1.disable_autobaud_listen_mode();
+                    case 3:{
+                            build_int |= in_byte << 24;
+                            if(build_int > 0){
+                                if(build_int & 0x80000000){ //signals that enabled and listen only status are also being passed
+                                    if(build_int & 0x40000000){
+                                        settings.CAN0_Enabled = true;
+                                        Can0.enable();
+                                    } else{
+                                        settings.CAN0_Enabled = false;
+                                        Can0.disable();
+                                    }
+                                    if(build_int & 0x20000000){
+                                        settings.CAN0ListenOnly = true;
+                                        Can0.enable_autobaud_listen_mode();
+                                    } else{
+                                        settings.CAN0ListenOnly = false;
+                                        Can0.disable_autobaud_listen_mode();
+                                    }
+                                } else{
+                                    Can0.enable(); //if not using extended status mode then just default to enabling - this was old behavior
+                                    settings.CAN0_Enabled = true;
+                                }
+                                build_int = build_int & 0xFFFFF;
+                                if(build_int > 1000000) build_int = 1000000;
+                                Can0.begin(build_int, 255);
+                                //Can0.set_baudrate(build_int);
+                                settings.CAN0Speed = build_int;
+                            } else{ //disable first canbus
+                                Can0.disable();
+                                settings.CAN0_Enabled = false;
+                            }
+                            break;
                         }
-                    } else {
-                        Can1.enable(); //if not using extended status mode then just default to enabling - this was old behavior
-                        settings.CAN1_Enabled = true;
-                    }
-                    build_int = build_int & 0xFFFFF;
-                    if (build_int > 1000000) build_int = 1000000;
-                    Can1.begin(build_int, 255);
-                    //Can1.set_baudrate(build_int);
+                    case 4:{
+                            build_int = in_byte;
+                            break;
+                        }
+                    case 5:{
+                            build_int |= in_byte << 8;
+                            break;
+                        }
+                    case 6:{
+                            build_int |= in_byte << 16;
+                            break;
+                        }
+                    case 7:{
+                            build_int |= in_byte << 24;
+                            if(build_int > 0){
+                                if(build_int & 0x80000000){ //signals that enabled and listen only status are also being passed
+                                    if(build_int & 0x40000000){
+                                        settings.CAN1_Enabled = true;
+                                        Can1.enable();
+                                    } else{
+                                        settings.CAN1_Enabled = false;
+                                        Can1.disable();
+                                    }
+                                    if(build_int & 0x20000000){
+                                        settings.CAN1ListenOnly = true;
+                                        Can1.enable_autobaud_listen_mode();
+                                    } else{
+                                        settings.CAN1ListenOnly = false;
+                                        Can1.disable_autobaud_listen_mode();
+                                    }
+                                } else{
+                                    Can1.enable(); //if not using extended status mode then just default to enabling - this was old behavior
+                                    settings.CAN1_Enabled = true;
+                                }
+                                build_int = build_int & 0xFFFFF;
+                                if(build_int > 1000000) build_int = 1000000;
+                                Can1.begin(build_int, 255);
+                                //Can1.set_baudrate(build_int);
 
-                    settings.CAN1Speed = build_int;
-                } else { //disable second canbus
-                    Can1.disable();
-                    settings.CAN1_Enabled = false;
+                                settings.CAN1Speed = build_int;
+                            } else{ //disable second canbus
+                                Can1.disable();
+                                settings.CAN1_Enabled = false;
+                            }
+                            state = IDLE;
+                            //now, write out the new canbus settings to EEPROM
+                            EEPROM.write(EEPROM_ADDR, settings);
+                            setPromiscuousMode();
+                            break;
+                        }
                 }
-                state = IDLE;
-                //now, write out the new canbus settings to EEPROM
-                EEPROM.write(EEPROM_ADDR, settings);
-                setPromiscuousMode();
+                step++;
                 break;
             }
-            step++;
-            break;
-        case SET_SINGLEWIRE_MODE:
-            if (in_byte == 0x10) {
-            } else {
+        case SET_SINGLEWIRE_MODE:{
+                if(in_byte == 0x10){
+                } else{
+                }
+                EEPROM.write(EEPROM_ADDR, settings);
+                state = IDLE;
+                break;
             }
-            EEPROM.write(EEPROM_ADDR, settings);
-            state = IDLE;
-            break;
-        case SET_SYSTYPE:
+        case SET_SYSTYPE:{
             settings.sysType = in_byte;
             EEPROM.write(EEPROM_ADDR, settings);
             loadSettings();
             state = IDLE;
             break;
-        case ECHO_CAN_FRAME:
-            buff[1 + step] = in_byte;
-            switch (step) {
-            case 0:
-                build_out_frame.id = in_byte;
-                break;
-            case 1:
-                build_out_frame.id |= in_byte << 8;
-                break;
-            case 2:
-                build_out_frame.id |= in_byte << 16;
-                break;
-            case 3:
-                build_out_frame.id |= in_byte << 24;
-                if (build_out_frame.id & 1 << 31) {
-                    build_out_frame.id &= 0x7FFFFFFF;
-                    build_out_frame.extended = true;
-                } else build_out_frame.extended = false;
-                break;
-            case 4:
-                out_bus = in_byte & 1;
-                break;
-            case 5:
-                build_out_frame.length = in_byte & 0xF;
-                if (build_out_frame.length > 8) build_out_frame.length = 8;
-                break;
-            default:
-                if (step < build_out_frame.length + 6) {
-                    build_out_frame.data.bytes[step - 6] = in_byte;
-                } else {
-                    state = IDLE;
-                    //this would be the checksum byte. Compute and compare.
-                    temp8 = checksumCalc(buff, step);
-                    //if (temp8 == in_byte)
-                    //{
-                    toggleRXLED();
-                    if (isConnected) sendFrameToUSB(build_out_frame, 0);
-                    //}
-                }
-                break;
             }
+        case ECHO_CAN_FRAME:{
+                buff[1 + step] = in_byte;
+                switch (step) {
+                case 0:{
+                    build_out_frame.id = in_byte;
+                    break;
+                    }
+                case 1:{
+                    build_out_frame.id |= in_byte << 8;
+                    break;
+                    }
+                case 2:{
+                    build_out_frame.id |= in_byte << 16;
+                    break;
+                    }
+                case 3:{
+                    build_out_frame.id |= in_byte << 24;
+                    if (build_out_frame.id & 1 << 31) {
+                        build_out_frame.id &= 0x7FFFFFFF;
+                        build_out_frame.extended = true;
+                    } else build_out_frame.extended = false;
+                    break;
+                    }
+                case 4:{
+                    out_bus = in_byte & 1;
+                    break;
+                    }
+                case 5:{
+                    build_out_frame.length = in_byte & 0xF;
+                    if (build_out_frame.length > 8) build_out_frame.length = 8;
+                    break;
+                    }
+                default:{
+                    if (step < build_out_frame.length + 6) {
+                        build_out_frame.data.bytes[step - 6] = in_byte;
+                    } else {
+                        state = IDLE;
+                        //this would be the checksum byte. Compute and compare.
+                        temp8 = checksumCalc(buff, step);
+                        //if (temp8 == in_byte)
+                        //{
+                        toggleRXLED();
+                        if (isConnected) sendFrameToUSB(build_out_frame, 0);
+                        //}
+                    }
+                    break;
+                    }
+                }
             step++;
             break;
+            }
         }
     }
     Logger::loop();

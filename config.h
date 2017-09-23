@@ -56,6 +56,42 @@ SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 #define NUM_DIGITAL 4
 #define NUM_OUTPUT  8
 
+// ************************************************************************************************	//
+//										M2 Pin Definations											//
+// ************************************************************************************************	//
+
+const uint8_t Toggle_Button = Button2;	// M2 Button to toggle trigger CAN Message sending or receiving
+
+const uint8_t RGB_Red_Led = RGB_RED;
+const uint8_t RGB_Green_Led = RGB_GREEN;
+const uint8_t RGB_Blue_Led = RGB_BLUE;
+const uint8_t Wifi_Activity = RGB_Blue_Led;
+
+const uint8_t Red_Led = DS2;
+const uint8_t Yellow_Led1 = DS3;
+const uint8_t Yellow_Led2 = DS4;
+const uint8_t Yellow_Led3 = DS5;
+const uint8_t Green_Led = DS6;
+
+const uint8_t ELM_TX = XBEE_TX;
+const uint8_t ELM_RX = XBEE_RX;
+const uint8_t XBEE_Program = XBEE_MULT4;	//XBEE programing pin
+const uint8_t XBEE_Reset = XBEE_RST;		//XBEE Reset pin
+const bool M2_Led_State = false;
+
+// Single Wire Can
+const uint8_t SWCan_Mod0_Pin = SWC_M0;
+const uint8_t SWCan_Mod1_Pin = SWC_M1;
+const uint8_t SWCan_Interrupt = SWC_INT;	//INT = SWC_nINT = C16 = Digital pin 47
+
+const uint8_t SWCan_Chip_Select = SPI0_CS3;	//CS = SPI0_nCS3 = B23 = Digital pin 78
+
+//const uint8_t Voltage_Sense = V_SENSE;
+
+
+// ************************************************************************************************	//
+
+
 //Number of times a frame would have to be sent or received to actually toggle the LED
 //This number thus slows down the blinking quite a bit - Useful to make it easier to see
 //what is going on based on the LEDs.
