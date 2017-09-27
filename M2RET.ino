@@ -30,7 +30,7 @@ SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 #include "M2RET.h"
 #include "config.h"
 #include <due_can.h>
-#include <Arduino_Due_SD_HSCMI.h> // This creates the object SD (HSCMI connected sdcard)
+#include <Arduino_Due_SD_HSMCI.h> // This creates the object SD (HSMCI connected sdcard)
 #include <due_wire.h>
 #include <SPI.h>
 #include <lin_stack.h>

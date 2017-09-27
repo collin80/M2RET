@@ -530,7 +530,7 @@ void SerialConsole::handleConfigCmd()
             SWCAN.setupSW(settings.SWCANSpeed);       
             delay(20);
             SWCAN.mode(3); // Go to normal mode. 0 - Sleep, 1 - High Speed, 2 - High Voltage Wake-Up, 3 - Normal
-            attachInterrupt(47, CANHandler, FALLING); //enable interrupt for SWCAN
+            attachInterrupt(SWC_INT, CANHandler, FALLING); //enable interrupt for SWCAN
         }
         else {
             SWCAN.Reset();
