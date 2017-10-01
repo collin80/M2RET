@@ -34,7 +34,7 @@ SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 #include <due_wire.h>
 #include <SPI.h>
 #include <lin_stack.h>
-#include <sw_can.h>
+#include <MCP2515_sw_can.h>
 #include "ELM327_Emulator.h"
 
 #include "EEPROM.h"
@@ -405,7 +405,7 @@ void sendFrame(CANRaw &bus, CAN_FRAME &frame)
 
 void sendFrameSW(CAN_FRAME &frame)
 {
-    SWFRAME swFrame;
+    Frame swFrame;
     swFrame.id = frame.id;
     swFrame.extended = frame.extended;
     swFrame.length = frame.length;
@@ -654,7 +654,7 @@ void loop()
 {
     static int loops = 0;
     CAN_FRAME incoming;
-    SWFRAME swIncoming;
+    Frame swIncoming;
     static CAN_FRAME build_out_frame;
     static int out_bus;
     int in_byte;
