@@ -29,7 +29,7 @@
 #include "SerialConsole.h"
 #include <due_wire.h>
 #include <due_can.h>
-#include <sw_can.h>
+#include <MCP2515_sw_can.h>
 #include <lin_stack.h>
 #include "EEPROM.h"
 #include "config.h"
@@ -359,7 +359,7 @@ void SerialConsole::handleLawicelCmd()
                 Can1.sendFrame(outFrame);                
             }
             if (!stricmp(tokens[1], "SWCAN")) {
-                SWFRAME swFrame;
+                Frame swFrame;
                 swFrame.id = id;
                 swFrame.length = numBytes;
                 swFrame.extended = false;
@@ -878,7 +878,7 @@ bool SerialConsole::handleSWCANSend(char *inputString)
     char *idTok = strtok(inputString, ",");
     char *lenTok = strtok(NULL, ",");
     char *dataTok;
-    SWFRAME frame;
+    Frame frame;
 
     if (!idTok) return false;
     if (!lenTok) return false;
