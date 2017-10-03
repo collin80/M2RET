@@ -952,6 +952,7 @@ void loop()
                        }
                     }
                     */
+                    build_out_frame.rtr = 0;
                     if (out_bus == 0) sendFrame(Can0, build_out_frame);
                     if (out_bus == 1) sendFrame(Can1, build_out_frame);
                     if (out_bus == 2) sendFrameSW(build_out_frame);

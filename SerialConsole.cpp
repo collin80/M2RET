@@ -864,6 +864,7 @@ bool SerialConsole::handleCANSend(CANRaw &port, char *inputString)
     frame.id = idVal;
     if (idVal >= 0x7FF) frame.extended = true;
     else frame.extended = false;
+    frame.rtr = 0;
     frame.length = lenVal;
     port.sendFrame(frame);
     
@@ -896,6 +897,7 @@ bool SerialConsole::handleSWCANSend(char *inputString)
     frame.id = idVal;
     if (idVal >= 0x7FF) frame.extended = true;
     else frame.extended = false;
+    frame.rtr = 0;
     frame.length = lenVal;
     SWCAN.EnqueueTX(frame);
     Logger::console("Sending frame with id: 0x%x len: %i", frame.id, frame.length);
