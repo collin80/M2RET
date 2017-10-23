@@ -47,10 +47,10 @@ SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 //The host should be polling every 1ms or so and so this time should be a small multiple of that
 #define SER_BUFF_FLUSH_INTERVAL 2000
 
-#define CFG_BUILD_NUM   339
-#define CFG_VERSION "M2RET Alpha May 25 2017"
+#define CFG_BUILD_NUM   340
+#define CFG_VERSION "M2RET Alpha Oct 22 2017"
 #define EEPROM_ADDR     0
-#define EEPROM_VER      0x18
+#define EEPROM_VER      0x20
 
 #define NUM_ANALOG  4
 #define NUM_DIGITAL 4
@@ -78,19 +78,19 @@ enum FILEOUTPUTTYPE {
     CRTD = 3
 };
 
-struct EEPROMSettings { //Must stay under 256 - currently somewhere around 222
+struct EEPROMSettings { //Must stay under 256
     uint8_t version;
 
     uint32_t CAN0Speed;
     uint32_t CAN1Speed;
     uint32_t SWCANSpeed;
-    uint32_t LINSpeed;
+    uint32_t LIN1Speed;
+    uint32_t LIN2Speed;
     boolean CAN0_Enabled;
     boolean CAN1_Enabled;
     boolean SWCAN_Enabled;
-    boolean LIN_Enabled;
-    FILTER CAN0Filters[8]; // filters for our 8 mailboxes - 10*8 = 80 bytes
-    FILTER CAN1Filters[8]; // filters for our 8 mailboxes - 10*8 = 80 bytes
+    boolean LIN1_Enabled;
+    boolean LIN2_Enabled;
 
     boolean useBinarySerialComm; //use a binary protocol on the serial link or human readable format?
     FILEOUTPUTTYPE fileOutputType; //what format should we use for file output?
@@ -153,6 +153,7 @@ struct SystemSettings {
     boolean lawicelTimestamping;
     int lawicelPollCounter;
     boolean lawicelBusReception[NUM_BUSES]; //does user want to see messages from this bus?
+    int8_t numBuses; //number of buses this hardware currently supports.
 };
 
 extern EEPROMSettings settings;
