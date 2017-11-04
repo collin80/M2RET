@@ -30,11 +30,11 @@ SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 #include "M2RET.h"
 #include "config.h"
 #include <due_can.h>
-#include <Arduino_Due_SD_HSCMI.h> // This creates the object SD (HSCMI connected sdcard)
+#include <Arduino_Due_SD_HSMCI.h> // This creates the object SD (HSMCI connected sdcard)
 #include <due_wire.h>
 #include <SPI.h>
 #include <lin_stack.h>
-#include <sw_can.h>
+#include <MCP2515_sw_can.h>
 #include "ELM327_Emulator.h"
 
 #include "EEPROM.h"
@@ -405,7 +405,7 @@ void sendFrame(CANRaw &bus, CAN_FRAME &frame)
 
 void sendFrameSW(CAN_FRAME &frame)
 {
-    SWFRAME swFrame;
+    Frame swFrame;
     swFrame.id = frame.id;
     swFrame.extended = frame.extended;
     swFrame.length = frame.length;
@@ -654,7 +654,7 @@ void loop()
 {
     static int loops = 0;
     CAN_FRAME incoming;
-    SWFRAME swIncoming;
+    Frame swIncoming;
     static CAN_FRAME build_out_frame;
     static int out_bus;
     int in_byte;
@@ -952,6 +952,7 @@ void loop()
                        }
                     }
                     */
+                    build_out_frame.rtr = 0;
                     if (out_bus == 0) sendFrame(Can0, build_out_frame);
                     if (out_bus == 1) sendFrame(Can1, build_out_frame);
                     if (out_bus == 2) sendFrameSW(build_out_frame);

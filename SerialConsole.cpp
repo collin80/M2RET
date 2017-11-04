@@ -29,7 +29,7 @@
 #include "SerialConsole.h"
 #include <due_wire.h>
 #include <due_can.h>
-#include <sw_can.h>
+#include <MCP2515_sw_can.h>
 #include <lin_stack.h>
 #include "EEPROM.h"
 #include "config.h"
@@ -359,7 +359,7 @@ void SerialConsole::handleLawicelCmd()
                 Can1.sendFrame(outFrame);                
             }
             if (!stricmp(tokens[1], "SWCAN")) {
-                SWFRAME swFrame;
+                Frame swFrame;
                 swFrame.id = id;
                 swFrame.length = numBytes;
                 swFrame.extended = false;
@@ -530,7 +530,7 @@ void SerialConsole::handleConfigCmd()
             SWCAN.setupSW(settings.SWCANSpeed);       
             delay(20);
             SWCAN.mode(3); // Go to normal mode. 0 - Sleep, 1 - High Speed, 2 - High Voltage Wake-Up, 3 - Normal
-            attachInterrupt(47, CANHandler, FALLING); //enable interrupt for SWCAN
+            attachInterrupt(SWC_INT, CANHandler, FALLING); //enable interrupt for SWCAN
         }
         else {
             SWCAN.Reset();
@@ -864,6 +864,7 @@ bool SerialConsole::handleCANSend(CANRaw &port, char *inputString)
     frame.id = idVal;
     if (idVal >= 0x7FF) frame.extended = true;
     else frame.extended = false;
+    frame.rtr = 0;
     frame.length = lenVal;
     port.sendFrame(frame);
     
@@ -878,7 +879,7 @@ bool SerialConsole::handleSWCANSend(char *inputString)
     char *idTok = strtok(inputString, ",");
     char *lenTok = strtok(NULL, ",");
     char *dataTok;
-    SWFRAME frame;
+    Frame frame;
 
     if (!idTok) return false;
     if (!lenTok) return false;
@@ -896,6 +897,7 @@ bool SerialConsole::handleSWCANSend(char *inputString)
     frame.id = idVal;
     if (idVal >= 0x7FF) frame.extended = true;
     else frame.extended = false;
+    frame.rtr = 0;
     frame.length = lenVal;
     SWCAN.EnqueueTX(frame);
     Logger::console("Sending frame with id: 0x%x len: %i", frame.id, frame.length);

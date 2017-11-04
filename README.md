@@ -10,13 +10,13 @@ A fork of the GVRET project.
 You will need the following to be able to compile the run this project:
 
 - [Arduino IDE](https://www.arduino.cc/en/Main/Software) 1.5.4 or higher (tested all of the way up to 1.6.12)
-- [M2 Board Files] (https://github.com/macchina/arduino-boards-sam) - Needed to define the pins for various hardware
+- [M2 Board Configuration](https://github.com/macchina/arduino-boards-sam) - Needed to define the pins for various hardware
 - [due_can](https://github.com/collin80/due_can) - Object oriented canbus library for Arduino Due compatible boards.
 - [due_wire](https://github.com/collin80/due_wire) - An alternative I2C library for Due with DMA support.
-- [Arduino_Due_SD_HSCMI](https://github.com/macchina/Arduino_Due_SD_HSMCI) - SD card support library
-- [SD_HSCMI](https://github.com/collin80/SD_HSCMI) - Another SD support library
+- [M2_SD_HSMCI](https://github.com/macchina/M2_SD_HSMCI) - SD card support library
 - [LIN](https://github.com/macchina/LIN) - Support for the dual LIN ports on the M2
-- [SW_CAN](https://github.com/collin80/SW_CAN) - Single wire CAN support for M2 board
+- [Single-Wire CAN (MCP2515)](https://github.com/macchina/Single-Wire-CAN-mcp2515) - Single wire CAN support for M2 board
+- [MCP2515](https://github.com/macchina/mcp2515) - CAN library that powers the Single-Wire CAN library
 
 All libraries belong in %USERPROFILE%\Documents\Arduino\libraries (Windows) or ~/Arduino/libraries (Linux/Mac).
 You will need to remove -master or any other postfixes. Your library folders should be named as above.
