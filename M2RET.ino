@@ -279,9 +279,9 @@ void setup()
 
     if (settings.CAN0_Enabled) {
         if (settings.CAN0ListenOnly) {
-            Can0.enable_autobaud_listen_mode();
+            Can0.setListenOnlyMode(true);
         } else {
-            Can0.disable_autobaud_listen_mode();
+            Can0.setListenOnlyMode(false);
         }
         Can0.enable();
         Can0.begin(settings.CAN0Speed, 255);
@@ -291,9 +291,9 @@ void setup()
 
     if (settings.CAN1_Enabled) {
         if (settings.CAN1ListenOnly) {
-            Can1.enable_autobaud_listen_mode();
+            Can1.setListenOnlyMode(true);
         } else {
-            Can1.disable_autobaud_listen_mode();
+            Can1.setListenOnlyMode(false);
         }
         Can1.enable();
         Can1.begin(settings.CAN1Speed, 255);
@@ -305,9 +305,18 @@ void setup()
         SWCAN.setupSW(settings.SWCANSpeed);       
         delay(20);
         SWCAN.mode(3); // Go to normal mode. 0 - Sleep, 1 - High Speed, 2 - High Voltage Wake-Up, 3 - Normal
+        if (settings.SWCANListenOnly)
+        {
+            SWCAN.setListenOnlyMode(true);
+        }
+        else
+        {
+            SWCAN.setListenOnlyMode(false);
+        }
         attachInterrupt(SWC_INT, CANHandler, FALLING); //enable interrupt for SWCAN
         SerialUSB.print("Enabled SWCAN with speed ");
         SerialUSB.println(settings.SWCANSpeed);
+        SWCAN.InitFilters(true);
     }
 
 /*
@@ -376,26 +385,15 @@ void addBits(int offset, CAN_FRAME &frame)
     if (frame.extended) busLoad[offset].bitsSoFar += 18;
 }
 
-void sendFrame(CANRaw &bus, CAN_FRAME &frame)
+void sendFrame(CAN_COMMON *bus, CAN_FRAME &frame)
 {
     int whichBus = 0;
-    if (&bus == &Can1) whichBus = 1;
-    bus.sendFrame(frame);
+    if (bus == &Can1) whichBus = 1;
+    if (bus == &SWCAN) whichBus = 2;
+    bus->sendFrame(frame);
     sendFrameToFile(frame, whichBus); //copy sent frames to file as well.
     addBits(whichBus, frame);
     toggleTXLED();
-}
-
-void sendFrameSW(CAN_FRAME &frame)
-{
-    Frame swFrame;
-    swFrame.id = frame.id;
-    swFrame.extended = frame.extended;
-    swFrame.length = frame.length;
-    swFrame.data.value = frame.data.value;
-    SWCAN.EnqueueTX(swFrame);
-    toggleTXLED();
-    sendFrameToFile(frame, 2);
 }
 
 void toggleRXLED()
@@ -613,11 +611,11 @@ void sendDigToggleMsg()
     for (int c = 0; c < frame.length; c++) frame.data.byte[c] = digToggleSettings.payload[c];
     if (digToggleSettings.mode & 2) {
         SerialUSB.println("Sending digital toggle message on CAN0");
-        sendFrame(Can0, frame);
+        sendFrame(&Can0, frame);
     }
     if (digToggleSettings.mode & 4) {
         SerialUSB.println("Sending digital toggle message on CAN1");
-        sendFrame(Can1, frame);
+        sendFrame(&Can1, frame);
     }
 }
 
@@ -637,7 +635,6 @@ void loop()
 {
     static int loops = 0;
     CAN_FRAME incoming;
-    Frame swIncoming;
     static CAN_FRAME build_out_frame;
     static int out_bus;
     int in_byte;
@@ -705,12 +702,7 @@ void loop()
         if (SysSettings.logToFile) sendFrameToFile(incoming, 1);
     }
     
-    if (SWCAN.GetRXFrame(swIncoming)) {
-        //copy into our normal CAN struct so we can pretend and all existing functions can access the frame
-        incoming.id = swIncoming.id;
-        incoming.extended = swIncoming.extended;
-        incoming.length = swIncoming.length;
-        incoming.data.value = swIncoming.data.value;
+    if (SWCAN.GetRXFrame(incoming)) {
         toggleRXLED();
         if (isConnected) sendFrameToUSB(incoming, 2);
         //TODO: Maybe support digital toggle system on swcan too.
@@ -933,7 +925,7 @@ void loop()
                 } else build_out_frame.extended = false;
                 break;
             case 4:
-                out_bus = in_byte & 1;
+                out_bus = in_byte & 3;
                 break;
             case 5:
                 build_out_frame.length = in_byte & 0xF;
@@ -962,9 +954,9 @@ void loop()
                     }
                     */
                     build_out_frame.rtr = 0;
-                    if (out_bus == 0) sendFrame(Can0, build_out_frame);
-                    if (out_bus == 1) sendFrame(Can1, build_out_frame);
-                    if (out_bus == 2) sendFrameSW(build_out_frame);
+                    if (out_bus == 0) sendFrame(&Can0, build_out_frame);
+                    if (out_bus == 1) sendFrame(&Can1, build_out_frame);
+                    if (out_bus == 2) sendFrame(&SWCAN, build_out_frame);
                     /*
                     if (settings.singleWireMode == 1)
                     		   {

@@ -360,12 +360,13 @@ void SerialConsole::handleLawicelCmd()
                 Can1.sendFrame(outFrame);                
             }
             if (!stricmp(tokens[1], "SWCAN")) {
-                Frame swFrame;
-                swFrame.id = id;
-                swFrame.length = numBytes;
-                swFrame.extended = false;
-                for (int b = 0; b < numBytes; b++) swFrame.data.bytes[b] = bytes[b];
-                SWCAN.EnqueueTX(swFrame);
+                CAN_FRAME outFrame;
+                outFrame.id = id;
+                outFrame.length = numBytes;
+                outFrame.extended = false;
+                outFrame.rtr = 0;
+                for (int b = 0; b < numBytes; b++) outFrame.data.bytes[b] = bytes[b];                
+                SWCAN.sendFrame(outFrame);
             }
             if (!stricmp(tokens[1], "LIN1")) {
             }
@@ -411,12 +412,10 @@ void SerialConsole::handleLawicelCmd()
                 if (!stricmp(tokens[4], "X")) 
                 {
                     SWCAN.SetRXFilter(0, filt, true);
-                    SWCAN.SetRXMask(0, mask, true);
                 }
                 else 
                 {
                     SWCAN.SetRXFilter(0, filt, false);
-                    SWCAN.SetRXMask(0, mask, false);
                 }
             }
             if (!stricmp(tokens[1], "LIN1")) {
@@ -880,7 +879,7 @@ bool SerialConsole::handleSWCANSend(char *inputString)
     char *idTok = strtok(inputString, ",");
     char *lenTok = strtok(NULL, ",");
     char *dataTok;
-    Frame frame;
+    CAN_FRAME frame;
 
     if (!idTok) return false;
     if (!lenTok) return false;
@@ -900,7 +899,7 @@ bool SerialConsole::handleSWCANSend(char *inputString)
     else frame.extended = false;
     frame.rtr = 0;
     frame.length = lenVal;
-    SWCAN.EnqueueTX(frame);
+    SWCAN.sendFrame(frame);
     Logger::console("Sending frame with id: 0x%x len: %i", frame.id, frame.length);
     SysSettings.txToggle = !SysSettings.txToggle;
     setLED(SysSettings.LED_CANTX, SysSettings.txToggle);
