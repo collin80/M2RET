@@ -47,20 +47,42 @@ SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 //The host should be polling every 1ms or so and so this time should be a small multiple of that
 #define SER_BUFF_FLUSH_INTERVAL 2000
 
-#define CFG_BUILD_NUM   343
-#define CFG_VERSION "M2RET Alpha Oct 22 2017"
-#define EEPROM_ADDR     0
+#define CFG_BUILD_NUM   344
+#define CFG_VERSION "M2RET Alpha Nov 25 2017"
+#define EEPROM_ADDR     0x50
 #define EEPROM_VER      0x20
 
-#define NUM_ANALOG  4
-#define NUM_DIGITAL 4
-#define NUM_OUTPUT  8
+#define NUM_ANALOG  NUM_ANALOG_INPUTS   // we get the number of analogue inputs from variant.h
+#define NUM_DIGITAL 6   // Number of digital inputs on the M2 (sudo inputs/Analogue inputs)
+#define NUM_OUTPUT  6   // Number of digital outputs on the M2
+
+
+// Define the Digital Outputs for the M2
+#define Dig_Out1 GPIO1
+#define Dig_Out2 GPIO2
+#define Dig_Out3 GPIO3
+#define Dig_Out4 GPIO4
+#define Dig_Out5 GPIO5
+#define Dig_Out6 GPIO6
+
+// Define the Analogue Inputs for the M2
+// A0, A1, A2, A3, A7, A10, A11, A12, A15                     ADC CH#    position
+#define Ana_In1 g_APinDescription[ANALOG_1].ulADCChannelNumber  //12        7
+#define Ana_In2 g_APinDescription[ANALOG_2].ulADCChannelNumber  //11        6
+#define Ana_In3 g_APinDescription[ANALOG_3].ulADCChannelNumber  //0         0
+#define Ana_In4 g_APinDescription[ANALOG_4].ulADCChannelNumber  //2         2
+#define Ana_In5 g_APinDescription[ANALOG_5].ulADCChannelNumber  //1         1
+#define Ana_In6 g_APinDescription[ANALOG_6].ulADCChannelNumber  //7         4
+#define Ana_In7 g_APinDescription[V_SENSE].ulADCChannelNumber   //3         3   // Vehicle Voltage
+#define Ana_In8 g_APinDescription[I_SENSE].ulADCChannelNumber   //10        5   // M2 Supply AMPs
+#define Ana_In9 g_APinDescription[CPU_TEMP].ulADCChannelNumber  //15        8   // CPU Temp
+
 
 //Number of times a frame would have to be sent or received to actually toggle the LED
 //This number thus slows down the blinking quite a bit - Useful to make it easier to see
 //what is going on based on the LEDs.
 //Applies just to RX and TX leds
-#define BLINK_SLOWNESS      32
+#define BLINK_SLOWNESS     32  // default = 32
 
 #define NUM_BUSES   5   //number of buses possible on this hardware - CAN0, CAN1, SWCAN, LIN1, LIN2 currently
 
