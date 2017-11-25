@@ -105,31 +105,13 @@ void loadSettings()
         settings.SWCAN_Enabled = false;
         settings.SWCANListenOnly = false; //TODO: Not currently respected or implemented.
         settings.SWCANSpeed = 33333;
-        settings.LIN_Enabled = false;
-        settings.LINSpeed = 19200;
+        settings.LIN1_Enabled = false;
+        settings.LIN2_Enabled = false;
+        settings.LIN1Speed = 19200;
+        settings.LIN2Speed = 19200;
         sprintf((char *)settings.fileNameBase, "CANBUS");
         sprintf((char *)settings.fileNameExt, "TXT");
         settings.fileNum = 1;
-        for (int i = 0; i < 3; i++) {
-            settings.CAN0Filters[i].enabled = true;
-            settings.CAN0Filters[i].extended = true;
-            settings.CAN0Filters[i].id = 0;
-            settings.CAN0Filters[i].mask = 0;
-            settings.CAN1Filters[i].enabled = true;
-            settings.CAN1Filters[i].extended = true;
-            settings.CAN1Filters[i].id = 0;
-            settings.CAN1Filters[i].mask = 0;
-        }
-        for (int j = 3; j < 8; j++) {
-            settings.CAN0Filters[j].enabled = true;
-            settings.CAN0Filters[j].extended = false;
-            settings.CAN0Filters[j].id = 0;
-            settings.CAN0Filters[j].mask = 0;
-            settings.CAN1Filters[j].enabled = true;
-            settings.CAN1Filters[j].extended = false;
-            settings.CAN1Filters[j].id = 0;
-            settings.CAN1Filters[j].mask = 0;
-        }
         settings.fileOutputType = CRTD;
         settings.useBinarySerialComm = false;
         settings.autoStartLogging = false;
@@ -176,6 +158,7 @@ void loadSettings()
         SysSettings.lawicelMode = false;
         SysSettings.lawicellExtendedMode = false;
         SysSettings.lawicelTimestamping = false;
+        SysSettings.numBuses = 3; //Currently we support CAN0, CAN1, SWCAN
         for (int rx = 0; rx < NUM_BUSES; rx++) SysSettings.lawicelBusReception[rx] = true; //default to showing messages on RX 
         //set pin mode for all LEDS
         pinMode(RGB_GREEN, OUTPUT);
@@ -296,9 +279,9 @@ void setup()
 
     if (settings.CAN0_Enabled) {
         if (settings.CAN0ListenOnly) {
-            Can0.enable_autobaud_listen_mode();
+            Can0.setListenOnlyMode(true);
         } else {
-            Can0.disable_autobaud_listen_mode();
+            Can0.setListenOnlyMode(false);
         }
         Can0.enable();
         Can0.begin(settings.CAN0Speed, 255);
@@ -308,9 +291,9 @@ void setup()
 
     if (settings.CAN1_Enabled) {
         if (settings.CAN1ListenOnly) {
-            Can1.enable_autobaud_listen_mode();
+            Can1.setListenOnlyMode(true);
         } else {
-            Can1.disable_autobaud_listen_mode();
+            Can1.setListenOnlyMode(false);
         }
         Can1.enable();
         Can1.begin(settings.CAN1Speed, 255);
@@ -322,9 +305,18 @@ void setup()
         SWCAN.setupSW(settings.SWCANSpeed);       
         delay(20);
         SWCAN.mode(3); // Go to normal mode. 0 - Sleep, 1 - High Speed, 2 - High Voltage Wake-Up, 3 - Normal
+        if (settings.SWCANListenOnly)
+        {
+            SWCAN.setListenOnlyMode(true);
+        }
+        else
+        {
+            SWCAN.setListenOnlyMode(false);
+        }
         attachInterrupt(SWC_INT, CANHandler, FALLING); //enable interrupt for SWCAN
         SerialUSB.print("Enabled SWCAN with speed ");
         SerialUSB.println(settings.SWCANSpeed);
+        SWCAN.InitFilters(true);
     }
 
 /*
@@ -393,26 +385,15 @@ void addBits(int offset, CAN_FRAME &frame)
     if (frame.extended) busLoad[offset].bitsSoFar += 18;
 }
 
-void sendFrame(CANRaw &bus, CAN_FRAME &frame)
+void sendFrame(CAN_COMMON *bus, CAN_FRAME &frame)
 {
     int whichBus = 0;
-    if (&bus == &Can1) whichBus = 1;
-    bus.sendFrame(frame);
+    if (bus == &Can1) whichBus = 1;
+    if (bus == &SWCAN) whichBus = 2;
+    bus->sendFrame(frame);
     sendFrameToFile(frame, whichBus); //copy sent frames to file as well.
     addBits(whichBus, frame);
     toggleTXLED();
-}
-
-void sendFrameSW(CAN_FRAME &frame)
-{
-    Frame swFrame;
-    swFrame.id = frame.id;
-    swFrame.extended = frame.extended;
-    swFrame.length = frame.length;
-    swFrame.data.value = frame.data.value;
-    SWCAN.EnqueueTX(swFrame);
-    toggleTXLED();
-    sendFrameToFile(frame, 2);
 }
 
 void toggleRXLED()
@@ -630,11 +611,11 @@ void sendDigToggleMsg()
     for (int c = 0; c < frame.length; c++) frame.data.byte[c] = digToggleSettings.payload[c];
     if (digToggleSettings.mode & 2) {
         SerialUSB.println("Sending digital toggle message on CAN0");
-        sendFrame(Can0, frame);
+        sendFrame(&Can0, frame);
     }
     if (digToggleSettings.mode & 4) {
         SerialUSB.println("Sending digital toggle message on CAN1");
-        sendFrame(Can1, frame);
+        sendFrame(&Can1, frame);
     }
 }
 
@@ -654,7 +635,6 @@ void loop()
 {
     static int loops = 0;
     CAN_FRAME incoming;
-    Frame swIncoming;
     static CAN_FRAME build_out_frame;
     static int out_bus;
     int in_byte;
@@ -722,12 +702,7 @@ void loop()
         if (SysSettings.logToFile) sendFrameToFile(incoming, 1);
     }
     
-    if (SWCAN.GetRXFrame(swIncoming)) {
-        //copy into our normal CAN struct so we can pretend and all existing functions can access the frame
-        incoming.id = swIncoming.id;
-        incoming.extended = swIncoming.extended;
-        incoming.length = swIncoming.length;
-        incoming.data.value = swIncoming.data.value;
+    if (SWCAN.GetRXFrame(incoming)) {
         toggleRXLED();
         if (isConnected) sendFrameToUSB(incoming, 2);
         //TODO: Maybe support digital toggle system on swcan too.
@@ -899,8 +874,34 @@ void loop()
                 buff[0] = 0xF1;
                 buff[1] = 12;
                 buff[2] = 3; //number of buses actually supported by this hardware (TODO: will be 5 eventually)
-                SerialUSB.write(buff, 3);
+                SerialUSB.write(buff, 3);            
                 state = IDLE;
+                break;
+             case PROTO_GET_EXT_BUSES:
+                buff[0] = 0xF1;
+                buff[1] = 13;
+                buff[2] = settings.SWCAN_Enabled + ((unsigned char)settings.SWCANListenOnly << 4);
+                buff[3] = settings.SWCANSpeed;
+                buff[4] = settings.SWCANSpeed >> 8;
+                buff[5] = settings.SWCANSpeed >> 16;
+                buff[6] = settings.SWCANSpeed >> 24;
+                buff[7] = settings.LIN1_Enabled;
+                buff[8] = settings.LIN1Speed;
+                buff[9] = settings.LIN1Speed >> 8;
+                buff[10] = settings.LIN1Speed >> 16;
+                buff[11] = settings.LIN1Speed >> 24;
+                buff[12] = settings.LIN2_Enabled;
+                buff[13] = settings.LIN2Speed;
+                buff[14] = settings.LIN2Speed >> 8;
+                buff[15] = settings.LIN2Speed >> 16;
+                buff[16] = settings.LIN2Speed >> 24;
+                SerialUSB.write(buff, 17);
+                state = IDLE;             
+                break;
+             case PROTO_SET_EXT_BUSES:
+                state = SETUP_EXT_BUSES;
+                step = 0;
+                buff[0] = 0xF1;      
                 break;
             }
             break;
@@ -924,7 +925,7 @@ void loop()
                 } else build_out_frame.extended = false;
                 break;
             case 4:
-                out_bus = in_byte & 1;
+                out_bus = in_byte & 3;
                 break;
             case 5:
                 build_out_frame.length = in_byte & 0xF;
@@ -953,9 +954,9 @@ void loop()
                     }
                     */
                     build_out_frame.rtr = 0;
-                    if (out_bus == 0) sendFrame(Can0, build_out_frame);
-                    if (out_bus == 1) sendFrame(Can1, build_out_frame);
-                    if (out_bus == 2) sendFrameSW(build_out_frame);
+                    if (out_bus == 0) sendFrame(&Can0, build_out_frame);
+                    if (out_bus == 1) sendFrame(&Can1, build_out_frame);
+                    if (out_bus == 2) sendFrame(&SWCAN, build_out_frame);
                     /*
                     if (settings.singleWireMode == 1)
                     		   {
@@ -1134,6 +1135,128 @@ void loop()
             }
             step++;
             break;
+        case SETUP_EXT_BUSES: //setup enable/listenonly/speed for SWCAN, Enable/Speed for LIN1, LIN2
+            switch (step) {
+            case 0:
+                build_int = in_byte;
+                break;
+            case 1:
+                build_int |= in_byte << 8;
+                break;
+            case 2:
+                build_int |= in_byte << 16;
+                break;
+            case 3:
+                build_int |= in_byte << 24;
+                if (build_int > 0) {
+                    if (build_int & 0x80000000) { //signals that enabled and listen only status are also being passed
+                        if (build_int & 0x40000000) {
+                            settings.SWCAN_Enabled = true;
+                            SWCAN.mode(3);
+                        } else {
+                            settings.SWCAN_Enabled = false;
+                            SWCAN.mode(0);
+                        }
+                        if (build_int & 0x20000000) {
+                            settings.SWCANListenOnly = true;
+                            //SWCAN.enable_autobaud_listen_mode();
+                        } else {
+                            settings.SWCANListenOnly = false;
+                            //SWCAN.disable_autobaud_listen_mode();
+                        }
+                    } else {
+                        SWCAN.mode(3);
+                        settings.SWCAN_Enabled = true;
+                    }
+                    build_int = build_int & 0xFFFFF;
+                    if (build_int > 100000) build_int = 100000;
+                    SWCAN.setupSW(build_int);
+                    delay(20);
+                    SWCAN.mode(3); // Go to normal mode. 0 - Sleep, 1 - High Speed, 2 - High Voltage Wake-Up, 3 - Normal
+                    attachInterrupt(SWC_INT, CANHandler, FALLING); //enable interrupt for SWCAN
+                    settings.SWCANSpeed = build_int;
+                } else { //disable first canbus
+                    SWCAN.mode(0);
+                    settings.SWCAN_Enabled = false;
+                }
+                break;
+            case 4:
+                build_int = in_byte;
+                break;
+            case 5:
+                build_int |= in_byte << 8;
+                break;
+            case 6:
+                build_int |= in_byte << 16;
+                break;
+            case 7:
+                build_int |= in_byte << 24;
+                /* FIX THIS UP TO INITIALIZE LIN1
+                if (build_int > 0) {
+                    if (build_int & 0x80000000) { //signals that enabled and listen only status are also being passed
+                        if (build_int & 0x40000000) {
+                            settings.CAN1_Enabled = true;
+                            Can1.enable();
+                        } else {
+                            settings.CAN1_Enabled = false;
+                            Can1.disable();
+                        }
+                    } else {
+                        Can1.enable(); //if not using extended status mode then just default to enabling - this was old behavior
+                        settings.CAN1_Enabled = true;
+                    }
+                    build_int = build_int & 0xFFFFF;
+                    if (build_int > 1000000) build_int = 1000000;
+                    Can1.begin(build_int, 255);
+                    //Can1.set_baudrate(build_int);
+                    settings.CAN1Speed = build_int;
+                } else { //disable second canbus
+                    Can1.disable();
+                    settings.CAN1_Enabled = false;
+                }*/
+                break;
+            case 8:
+                build_int = in_byte;
+                break;
+            case 9:
+                build_int |= in_byte << 8;
+                break;
+            case 10:
+                build_int |= in_byte << 16;
+                break;
+            case 11:
+                build_int |= in_byte << 24;
+                /* FIX THIS UP TO INITIALIZE LIN2
+                if (build_int > 0) {
+                    if (build_int & 0x80000000) { //signals that enabled and listen only status are also being passed
+                        if (build_int & 0x40000000) {
+                            settings.CAN1_Enabled = true;
+                            Can1.enable();
+                        } else {
+                            settings.CAN1_Enabled = false;
+                            Can1.disable();
+                        }
+                    } else {
+                        Can1.enable(); //if not using extended status mode then just default to enabling - this was old behavior
+                        settings.CAN1_Enabled = true;
+                    }
+                    build_int = build_int & 0xFFFFF;
+                    if (build_int > 1000000) build_int = 1000000;
+                    Can1.begin(build_int, 255);
+                    //Can1.set_baudrate(build_int);
+                    settings.CAN1Speed = build_int;
+                } else { //disable second canbus
+                    Can1.disable();
+                    settings.CAN1_Enabled = false;
+                } */
+                state = IDLE;
+                //now, write out the new canbus settings to EEPROM
+                EEPROM.write(EEPROM_ADDR, settings);
+                //setPromiscuousMode();
+                break;
+            }        
+            step++;
+            break; 
         }
     }
     Logger::loop();

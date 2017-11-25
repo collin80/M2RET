@@ -79,21 +79,22 @@ void SerialConsole::printMenu()
     Logger::console("CAN0EN=%i - Enable/Disable CAN0 (0 = Disable, 1 = Enable)", settings.CAN0_Enabled);
     Logger::console("CAN0SPEED=%i - Set speed of CAN0 in baud (125000, 250000, etc)", settings.CAN0Speed);
     Logger::console("CAN0LISTENONLY=%i - Enable/Disable Listen Only Mode (0 = Dis, 1 = En)", settings.CAN0ListenOnly);
-    for (int i = 0; i < 8; i++) {
+    /*for (int i = 0; i < 8; i++) {
         sprintf(buff, "CAN0FILTER%i=0x%%x,0x%%x,%%i,%%i (ID, Mask, Extended, Enabled)", i);
         Logger::console(buff, settings.CAN0Filters[i].id, settings.CAN0Filters[i].mask,
                         settings.CAN0Filters[i].extended, settings.CAN0Filters[i].enabled);
-    }
+    }*/
     SerialUSB.println();
 
     Logger::console("CAN1EN=%i - Enable/Disable CAN1 (0 = Disable, 1 = Enable)", settings.CAN1_Enabled);
     Logger::console("CAN1SPEED=%i - Set speed of CAN1 in baud (125000, 250000, etc)", settings.CAN1Speed);
     Logger::console("CAN1LISTENONLY=%i - Enable/Disable Listen Only Mode (0 = Dis, 1 = En)", settings.CAN1ListenOnly);
+    /*
     for (int i = 0; i < 8; i++) {
         sprintf(buff, "CAN1FILTER%i=0x%%x,0x%%x,%%i,%%i (ID, Mask, Extended, Enabled)", i);
         Logger::console(buff, settings.CAN1Filters[i].id, settings.CAN1Filters[i].mask,
                         settings.CAN1Filters[i].extended, settings.CAN1Filters[i].enabled);
-    }
+    }*/
     
     SerialUSB.println();
 
@@ -359,12 +360,13 @@ void SerialConsole::handleLawicelCmd()
                 Can1.sendFrame(outFrame);                
             }
             if (!stricmp(tokens[1], "SWCAN")) {
-                Frame swFrame;
-                swFrame.id = id;
-                swFrame.length = numBytes;
-                swFrame.extended = false;
-                for (int b = 0; b < numBytes; b++) swFrame.data.bytes[b] = bytes[b];
-                SWCAN.EnqueueTX(swFrame);
+                CAN_FRAME outFrame;
+                outFrame.id = id;
+                outFrame.length = numBytes;
+                outFrame.extended = false;
+                outFrame.rtr = 0;
+                for (int b = 0; b < numBytes; b++) outFrame.data.bytes[b] = bytes[b];                
+                SWCAN.sendFrame(outFrame);
             }
             if (!stricmp(tokens[1], "LIN1")) {
             }
@@ -410,12 +412,10 @@ void SerialConsole::handleLawicelCmd()
                 if (!stricmp(tokens[4], "X")) 
                 {
                     SWCAN.SetRXFilter(0, filt, true);
-                    SWCAN.SetRXMask(0, mask, true);
                 }
                 else 
                 {
                     SWCAN.SetRXFilter(0, filt, false);
-                    SWCAN.SetRXMask(0, mask, false);
                 }
             }
             if (!stricmp(tokens[1], "LIN1")) {
@@ -825,17 +825,17 @@ bool SerialConsole::handleFilterSet(uint8_t bus, uint8_t filter, char *values)
     Logger::console("Setting CAN%iFILTER%i to ID 0x%x Mask 0x%x Extended %i Enabled %i", bus, filter, idVal, maskVal, extVal, enVal);
 
     if (bus == 0) {
-        settings.CAN0Filters[filter].id = idVal;
-        settings.CAN0Filters[filter].mask = maskVal;
-        settings.CAN0Filters[filter].extended = extVal;
-        settings.CAN0Filters[filter].enabled = enVal;
-        Can0.setRXFilter(filter, idVal, maskVal, extVal);
+        //settings.CAN0Filters[filter].id = idVal;
+        //settings.CAN0Filters[filter].mask = maskVal;
+        //settings.CAN0Filters[filter].extended = extVal;
+        //settings.CAN0Filters[filter].enabled = enVal;
+        //Can0.setRXFilter(filter, idVal, maskVal, extVal);
     } else if (bus == 1) {
-        settings.CAN1Filters[filter].id = idVal;
-        settings.CAN1Filters[filter].mask = maskVal;
-        settings.CAN1Filters[filter].extended = extVal;
-        settings.CAN1Filters[filter].enabled = enVal;
-        Can1.setRXFilter(filter, idVal, maskVal, extVal);
+        //settings.CAN1Filters[filter].id = idVal;
+        //settings.CAN1Filters[filter].mask = maskVal;
+        //settings.CAN1Filters[filter].extended = extVal;
+        //settings.CAN1Filters[filter].enabled = enVal;
+        //Can1.setRXFilter(filter, idVal, maskVal, extVal);
     }
 
     return true;
@@ -879,7 +879,7 @@ bool SerialConsole::handleSWCANSend(char *inputString)
     char *idTok = strtok(inputString, ",");
     char *lenTok = strtok(NULL, ",");
     char *dataTok;
-    Frame frame;
+    CAN_FRAME frame;
 
     if (!idTok) return false;
     if (!lenTok) return false;
@@ -899,7 +899,7 @@ bool SerialConsole::handleSWCANSend(char *inputString)
     else frame.extended = false;
     frame.rtr = 0;
     frame.length = lenVal;
-    SWCAN.EnqueueTX(frame);
+    SWCAN.sendFrame(frame);
     Logger::console("Sending frame with id: 0x%x len: %i", frame.id, frame.length);
     SysSettings.txToggle = !SysSettings.txToggle;
     setLED(SysSettings.LED_CANTX, SysSettings.txToggle);
