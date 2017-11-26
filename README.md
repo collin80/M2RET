@@ -17,6 +17,7 @@ You will need the following to be able to compile the run this project:
 - [LIN](https://github.com/macchina/LIN) - Support for the dual LIN ports on the M2
 - [Single-Wire CAN (MCP2515)](https://github.com/macchina/Single-Wire-CAN-mcp2515) - Single wire CAN support for M2 board
 - [MCP2515](https://github.com/macchina/mcp2515) - CAN library that powers the Single-Wire CAN library
+- [M2_12VIO] (Optional)(https://github.com/TDoust/M2_12VIO) - Macchina M2 12VIO library
 
 All libraries belong in %USERPROFILE%\Documents\Arduino\libraries (Windows) or ~/Arduino/libraries (Linux/Mac).
 You will need to remove -master or any other postfixes. Your library folders should be named as above.
@@ -31,12 +32,14 @@ The canbus is supposed to be terminated on both ends of the bus. This should not
 - Able to automatically start up and log all traffic to sdCard. Not stable at high bus loads just yet.
 - LAWICEL support (somewhat tested. Still experimental)
 - Blinken Lights!
+- Added ADC DMA support. digital I/O pins on the 26 pin connector
+- Added optional support for Macchina M2_12VIO library
+
 
 #### What does not work:
 - Either LIN bus
 - Single wire CAN
 - Anything you attach to the XBEE port
-- Any of the digital I/O pins on the 26 pin connector
 
 #### License:
 

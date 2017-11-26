@@ -39,16 +39,21 @@ typedef struct {
     uint16_t gain;
 } ADC_COMP;
 
+extern void ADC_Handler();
+void sys_early_setup();
 void setup_sys_io();
-uint16_t getAnalog(uint8_t which); //get value of one of the 4 analog inputs
-uint16_t getDiffADC(uint8_t which);
-uint16_t getRawADC(uint8_t which);
-boolean getDigital(uint8_t which); //get value of one of the 4 digital inputs
+void setupFastADC();
+void getADCAvg();  //CALL in loop()Take the arithmetic average of the readings in the buffer for each channel & updates adc_out_vals[x]
+uint16_t getAnalog(uint8_t which); //get value of one of the 9 analog inputs
+boolean getDigital(uint8_t which);  ////get value of one of the 6 digital/sudo(Analogue) inputs 0->(NUM_DIGITAL - 1)
 void setOutput(uint8_t which, boolean active); //set output high or not
 boolean getOutput(uint8_t which); //get current value of output state (high?)
-void setupFastADC();
-void sys_io_adc_poll();
-void sys_early_setup();
 void setLED(uint8_t, boolean);
+
+//void addNewADCVal(uint8_t which, uint16_t val); //Adds a new ADC reading to the buffer for a channel
+//uint16_t getDiffADC(uint8_t which);
+//uint16_t getRawADC(uint8_t which);
+//void sys_io_adc_poll();
+
 #endif
 
