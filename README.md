@@ -17,8 +17,8 @@ You will need the following to be able to compile the run this project:
 - [LIN](https://github.com/macchina/LIN) - Support for the dual LIN ports on the M2
 - [Single-Wire CAN (MCP2515)](https://github.com/macchina/Single-Wire-CAN-mcp2515) - Single wire CAN support for M2 board
 - [MCP2515](https://github.com/collin80/mcp2515) - CAN library that powers the Single-Wire CAN library
-- [can_common] (https://github.com/collin80/can_common) - Base CAN library used by due_can and mcp2515
-- [M2_12VIO] (https://github.com/TDoust/M2_12VIO) - Macchina M2 12VIO library
+- [can_common](https://github.com/collin80/can_common) - Base CAN library used by due_can and mcp2515
+- [M2_12VIO](https://github.com/TDoust/M2_12VIO) - Macchina M2 12VIO library
 
 All libraries belong in %USERPROFILE%\Documents\Arduino\libraries (Windows) or ~/Arduino/libraries (Linux/Mac).
 You will need to remove -master or any other postfixes. Your library folders should be named as above.
