@@ -32,10 +32,6 @@ SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
  */
 
-
-//  (!!! else comment out !!!)
-//#define _M2IO   // define to enable the use of the M2_12VIO library & the safe use of the I/O pins as well as PWM in M2RET
-
 #include "config.h"
 #include <due_can.h>
 #include <Arduino_Due_SD_HSMCI.h> // This creates the object SD (HSMCI connected sdcard)
@@ -43,6 +39,7 @@ SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 #include <SPI.h>
 #include <lin_stack.h>
 #include <MCP2515_sw_can.h>
+#include <M2_12VIO.h>
 #include "ELM327_Emulator.h"
 
 #include "EEPROM.h"
@@ -75,6 +72,8 @@ int serialBufferLength = 0; //not creating a ring buffer. The buffer should be l
 uint32_t lastFlushMicros = 0;
 BUSLOAD busLoad[2];
 uint32_t busLoadTimer;
+bool markToggle[6];
+uint32_t lastMarkTrigger = 0;
 
 EEPROMSettings settings;
 SystemSettings SysSettings;
@@ -377,6 +376,12 @@ void setup()
     SysSettings.lawicelAutoPoll = false;
     SysSettings.lawicelTimestamping = false;
     SysSettings.lawicelPollCounter = 0;
+
+    for (int i = 0; i < MARK_LIMIT; i++) 
+    {
+        markToggle[i] = false;
+        M2IO.InitButton_12VIO(i + 1);
+    }
     
     //elmEmulator.setup();
 
@@ -661,6 +666,22 @@ void sendDigToggleMsg()
 }
 
 /*
+Send a fake frame out USB and maybe to file to show where the mark was triggered at. The fake frame has bits 31 through 3
+set which can never happen in reality since frames are either 11 or 29 bit IDs. So, this is a sign that it is a mark frame
+and not a real frame. The bottom three bits specify which mark triggered.
+*/
+void sendMarkTriggered(int which)
+{
+    CAN_FRAME frame;
+    frame.id = 0xFFFFFFF8ull + which;
+    frame.extended = true;
+    frame.length = 0;
+    frame.rtr = 0;
+    sendFrameToUSB(frame, 0);
+    if (SysSettings.logToFile) sendFrameToFile(frame, 0);
+}
+
+/*
 Loop executes as often as possible all the while interrupts fire in the background.
 The serial comm protocol is as follows:
 All commands start with 0xF1 this helps to synchronize if there were comm issues
@@ -685,8 +706,7 @@ void loop()
     static uint32_t build_int;
     uint8_t temp8;
     uint16_t temp16;
-    //uint32_t temp32;
-    //static bool markToggle = false;
+    //uint32_t temp32;    
     bool isConnected = false;
     int serialCnt;
     uint32_t now = micros();
@@ -711,20 +731,31 @@ void loop()
 
     /*if (SerialUSB)*/ isConnected = true;
 
-    //there is no switch debouncing here at the moment
-    //if mark triggering causes bounce then debounce this later on.
-    /*
-    if (getDigital(0)) {
-    	if (!markToggle) {
-    		markToggle = true;
-    		if (!settings.useBinarySerialComm) SerialUSB.println("MARK TRIGGERED");
-    		else
-    		{ //figure out some sort of binary comm for the mark.
-    		}
-    	}
+    for (int i = 0; i < MARK_LIMIT; i++)
+    {
+        if ((lastMarkTrigger + 500) < millis()) //prevent jitter on switch closing
+        {
+            if (M2IO.GetButton_12VIO(i + 1)) {
+    	        if (!markToggle[i]) {
+    		        markToggle[i] = true;
+                    lastMarkTrigger = millis();
+    		        if (!settings.useBinarySerialComm) 
+                    {
+                        Logger::info("MARK %i TRIGGERED", i);
+                    }
+    		        else
+    		        {
+                        sendMarkTriggered(i);
+    		        }
+    	        }
+            }
+            else 
+            {
+                if (markToggle[i]) lastMarkTrigger = millis(); //causes it to also not trigger on jitter when switch opens
+                markToggle[i] = false;
+            }
+        }
     }
-    else markToggle = false;
-    */
 
     //if (!SysSettings.lawicelMode || SysSettings.lawicelAutoPoll || SysSettings.lawicelPollCounter > 0)
     //{

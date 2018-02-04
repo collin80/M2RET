@@ -41,9 +41,13 @@ by stimmer
  */
 
 #include "sys_io.h"
-
+#include <M2_12VIO.h>
 
 bool useRawADC = false;
+
+#ifdef _M2IO
+extern M2_12VIO M2IO;
+#endif
 
 // !!! Undefine to use user sequence registers in DMA mode !!!
 //#define ADC_User_Seq  // not yet working correctly in DMA mode, once working will save approx 2.2ms CPU time & not need to unroll data from adc_buf[x][x] in getADCAvg()
@@ -123,7 +127,7 @@ or write (receive). 16-bit counters define the size of current and next transfer
 read the number of transfers left for each channel.
 !!!The PDC has dedicated status registers which indicate if the transfer is enabled or disabled for each channel. The
 status for each channel is located in the associated peripheral status register. Transfers can be enabled and/or
-disabled by setting TXTEN/TXTDIS and RXTEN/RXTDIS in the peripheral’s Transfer Control Register.
+disabled by setting TXTEN/TXTDIS and RXTEN/RXTDIS in the peripheralï¿½s Transfer Control Register.
 !!!At the end of a transfer, the PDC channel sends status flags to its associated peripheral. These flags are visible in
 the peripheral status register (ENDRX, ENDTX, RXBUFF, and TXBUFE). Refer to Section 26.4.3 and to the
 associated peripheral user interface.
@@ -153,7 +157,7 @@ transferring data and sets the appropriate flag. But if the next counter value i
 next pointer/next counter are copied into the current pointer/current counter and the channel resumes the transfer
 whereas next pointer/next counter get zero/zero as values. At the end of this transfer the PDC channel sets the
 appropriate flags in the Peripheral Status Register.
-The following list gives an overview of how status register flags behave depending on the counters’ values:
+The following list gives an overview of how status register flags behave depending on the countersï¿½ values:
 . ENDRX flag is set when the PERIPH_RCR register reaches zero.
 . RXBUFF flag is set when both PERIPH_RCR and PERIPH_RNCR reach zero.
 . ENDTX flag is set when the PERIPH_TCR register reaches zero.
@@ -234,7 +238,7 @@ void sys_early_setup(){
 
     Enabled_Analogue_Pins = 0;
 #ifdef ADC_User_Seq
-    SEQR1 = SEQR2 = 0;  // Requires ADC_MR(USEQ) field is set to ‘1’.
+    SEQR1 = SEQR2 = 0;  // Requires ADC_MR(USEQ) field is set to ï¿½1ï¿½.
     for(i = 0; i < NUM_ANALOG; i++){    // Setup the Analogue User Sequence ADC Scanning order 
         Enabled_Analogue_Pins += 1 << i;    // Analogue pins enabled 0-8 "0x01FF" used in setupFastADC()
         if(i <= 7){
@@ -305,7 +309,7 @@ void setupFastADC(){
 
 /*
 The ADC uses the ADC Clock to perform conversions. Converting a single analog value to a 12-bit digital data
-requires Tracking Clock cycles as defined in the field TRACKTIM of the “ADC Mode Register” on page 1333 and
+requires Tracking Clock cycles as defined in the field TRACKTIM of the ï¿½ADC Mode Registerï¿½ on page 1333 and
 Transfer Clock cycles as defined in the field TRANSFER of the same register. The ADC Clock frequency is
 selected in the PRESCAL field of the Mode Register (ADC_MR). The tracking phase starts during the conversion
 of the previous channel. If the tracking time is longer than the conversion time, the tracking phase is extended to
@@ -344,7 +348,7 @@ If, for instance, someone wanted to average over 6ms instead then the prescaler 
     ADC_MR.
     When the gain, offset or differential input parameters of the analog cell change between two channels, the analog
     cell may need a specific settling time before starting the tracking phase.In that case, the controller automatically
-    waits during the settling time defined in the “ADC Mode Register”.Obviously, if the ANACH option is not set, this
+    waits during the settling time defined in the ï¿½ADC Mode Registerï¿½.Obviously, if the ANACH option is not set, this
     time is unused.
     Warning: No input buffer amplifier to isolate the source is included in the ADC.This must be taken into
     consideration to program a precise value in the TRACKTIM field.See the product ADC Characteristics section.
@@ -476,81 +480,3 @@ void setLED(uint8_t which, boolean hi){
         digitalWrite(which, LOW);
     }
 }
-
-/*
-ADC pins in the range 0->(NUM_ANALOG - 1)
-*/
-/*
-uint16_t getRawADC(uint8_t which)
-{
-uint32_t val;
-
-val = adc_values[adc[which][1]];
-
-return val;
-}
-*/
-
-/*
-Adds a new ADC reading to the buffer for a channel.
-The buffer is NumADCSamples large (either 32 or 64) and rolling
-ADC pins in the range 0->(NUM_ANALOG - 1)
-*/
-/*
-void addNewADCVal(uint8_t which, uint16_t val)
-{
-adc_buffer[which][adc_pointer[which]] = val;
-adc_pointer[which] = (adc_pointer[which] + 1) % NumADCSamples;
-}
-*/
-
-//polls	for the end of an adc conversion event. Then processes buffer to extract the averaged
-//value. It takes this value and averages it with the existing value in an 8 position buffer
-//which serves as a super fast place for other code to retrieve ADC values
-// This is only used when RAWADC is not defined
-/*
-void sys_io_adc_poll()
-{
-    uint32_t tempbuff[NUM_ANALOG];
-    if (obufn != bufn) {
-        for(uint8_t i = 0; i < NUM_ANALOG; i++){
-            tempbuff[NUM_ANALOG] = 0; //make sure its zero'd
-        }
-//        uint32_t tempbuff[NUM_ANALOG] = {0,0,0,0,0,0,0,0,0}; //make sure its zero'd
-
-        //the eight or four enabled adcs are interleaved in the buffer
-        //this is a somewhat unrolled for loop with no incrementer. it's odd but it works
-
-        for (uint16_t i = 0; i < NumADCSamples;) {
-            tempbuff[0] += adc_buf[obufn][i++];
-            tempbuff[1] += adc_buf[obufn][i++];
-            tempbuff[2] += adc_buf[obufn][i++];
-            tempbuff[3] += adc_buf[obufn][i++];
-            tempbuff[4] += adc_buf[obufn][i++];
-            tempbuff[5] += adc_buf[obufn][i++];
-            tempbuff[6] += adc_buf[obufn][i++];
-            tempbuff[7] += adc_buf[obufn][i++];
-            tempbuff[8] += adc_buf[obufn][i++];
-        }
-
-        //now, all of the ADC values are summed over 32/64 readings. So, divide by 32/64 (shift by 5/6) to get the average
-        //then add that to the old value we had stored and divide by two to average those. Lots of averaging going on.
-        for (int j = 0; j < 4; j++) {
-            adc_values[j] += (tempbuff[j] >> 6);
-            adc_values[j] = adc_values[j] >> 1;
-        }
-
-
-        for (uint8_t i = 0; i < NUM_ANALOG; i++) {
-            int val;
-            val = getRawADC(i);
-            adc_out_vals[i] = val;
-//			addNewADCVal(i, val);
-//			adc_out_vals[i] = getADCAvg(i);
-        }
-
-        obufn = bufn;
-    }
-}
-
-*/

@@ -82,6 +82,7 @@ void setSWCANEnabled();
 void setSWCANWakeup();
 void processDigToggleFrame(CAN_FRAME &frame);
 void sendDigToggleMsg();
+void sendMarkTriggered(int which);
 
 #endif /* GVRET_H_ */
 

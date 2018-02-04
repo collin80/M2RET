@@ -47,10 +47,14 @@ SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 //The host should be polling every 1ms or so and so this time should be a small multiple of that
 #define SER_BUFF_FLUSH_INTERVAL 2000
 
-#define CFG_BUILD_NUM   344
-#define CFG_VERSION "M2RET Alpha Nov 25 2017"
+#define CFG_BUILD_NUM   345
+#define CFG_VERSION "M2RET Alpha Feb 3 2018"
 #define EEPROM_ADDR     0x50
 #define EEPROM_VER      0x20
+
+//  (!!! else comment out !!!)
+#define _M2IO   // define to enable the use of the M2_12VIO library & the safe use of the I/O pins as well as PWM in M2RET
+#define MARK_LIMIT  6   //# of our analog input pins to use for marking. Defaults to all of them. Send voltage to pin to trigger it
 
 #define NUM_ANALOG  NUM_ANALOG_INPUTS   // we get the number of analogue inputs from variant.h
 #define NUM_DIGITAL 6   // Number of digital inputs on the M2 (sudo inputs/Analogue inputs)

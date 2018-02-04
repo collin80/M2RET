@@ -50,10 +50,5 @@ void setOutput(uint8_t which, boolean active); //set output high or not
 boolean getOutput(uint8_t which); //get current value of output state (high?)
 void setLED(uint8_t, boolean);
 
-//void addNewADCVal(uint8_t which, uint16_t val); //Adds a new ADC reading to the buffer for a channel
-//uint16_t getDiffADC(uint8_t which);
-//uint16_t getRawADC(uint8_t which);
-//void sys_io_adc_poll();
-
 #endif
 
