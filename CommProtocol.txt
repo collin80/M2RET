@@ -1,0 +1,132 @@
+GVRET Binary Protocol:
+
+0xE7 enables binary sending of incoming frames. Prior to this command it is configurable whether incoming
+frames will be output as ascii or binary. Once 0xE7 is seen while IDLE the comm will be binary. However, any time
+a binary command is not in process one can use the text based console. As such, it is possible to turn off binary sending
+mode from the console even if it has been enabled by the 0xE7 command.
+
+0xF1 character signifies the beginning of a binary mode command. After this byte is processed the firmware will be looking for
+command data in binary mode. The response to a command (if applicable) is 0xF1 followed by the command byte being responded
+to, followed by response. SO, basically it's the same data sent to it plus any relevant replies.
+
+Binary mode command byte:
+0 - Send a frame out one of the buses
+1 - Time Sync - Output the current time since start up in microseconds
+2 - Get state of digital input pins
+3 - Get state of analog input pins
+4 - Set state of digital outputs
+5 - Set CAN bus configuration
+6 - Get CAN bus config
+7 - Get device info
+8 - Set singlewire mode
+9 - Keep alive
+10 - Set system type
+11 - Echo CAN frame
+
+
+Detail of each command:
+
+0 - Send a frame out one of the buses
+    byte 0-3 - Frame ID LSB to MSB
+    byte 4 - which bus (0 = CAN0, 1 = CAN1, 2 = SWCAN, 3 = LIN1, 4 = LIN2)
+    byte 5 - Frame length
+    Byte 6-? - Data bytes
+    Reply: Nothing. It just sends the frame
+
+1 - Time Sync
+    No additional data sent
+    Reply:
+    byte 2-5 = Microseconds since start up LSB to MSB
+
+2 - Set state of digital inputs
+    No additional input bytes
+    Reply:
+    Byte 2 - Bitfield of inputs (Bit 0 = Input 0, etc) 0 = Low, 1 = High
+    Byte 3 - Checksum byte
+
+3 - Get state of analog input pins
+    No additional input bytes
+    Reply:
+    Byte 2-3 - Analog input 1 LSB then MSB
+    Byte 4-5 - Analog input 2 LSB then MSB
+    Byte 6-7 - Analog input 3 LSB then MSB
+    Byte 8-9 - Analog input 4 LSB then MSB
+    Byte 10 - Checksum byte
+
+4 - Set state of digital outputs
+    Byte 0 - Bitfield - Bit 0 = DIgital output 1, etc. 0 = Low, 1 = High
+    Reply: None
+
+5 - Set CAN bus configuration
+    Byte 0 - 3 - CAN0 Speed. If Bit 31 set then Bit 30 = Enable Bit 29 = Listen Only
+    Byte 4 - 7 - CAN1 Speed. Same deal, if bit 31 set then use 30 and 29 for config options
+    Reply: None
+
+6 - Get CAN bus config
+    No additional input bytes
+    Reply:
+    Byte 2 = Bit 0 - Enable  Bit 4 - Listen only
+    Byte 3-6 - CAN0 Speed LSB to MSB
+    Byte 7 = Bit 0 - Enable  Bit 4 - ListenOnly
+    Byte 8-11 - CAN1 Speed LSB to MSB
+
+7 - Get device info
+    Not additional input bytes
+    Reply:
+    Byte 2-3 - Build number LSB to MSB
+    Byte 4 - EEPROM version
+    Byte 5 - File output type
+    Byte 6 - Auto start logging
+    Byte 7 - Single wire mode
+
+8 - Set singlewire mode
+    Byte 0 - if 0x10 then single wire mode, otherwise no. Not very applicable to M2
+    Reply: Nothing
+
+9 - Keep alive
+    No additional inputs
+    Reply:
+    Byte 2 - 0xDE
+    Byte 3 - 0xAD - So, if it isn't dead it responds with DEAD.
+
+10 - Set system type
+    Byte 0 - System type (right now only 0 for M2 project but GVRET takes 0-2)
+    Reply: None
+
+11 - Echo CAN frame
+    byte 0-3 - Frame ID LSB to MSB
+    byte 4 - which bus (0 = CAN0, 1 = CAN1, 2 = SWCAN, 3 = LIN1, 4 = LIN2)
+    byte 5 - Frame length
+    Byte 6-? - Data bytes
+    Reply: As if the frame were received.
+
+Receiving a frame:
+There are three modes for frame reception:
+
+LAWICEL:
+    If Lawicel mode is active then frames are returned as proper for that standard:
+T for extended frames, t for standard frames
+Then, 3 or 8 hexadecimal digits
+Then, the length digit (0-8)
+Then, each byte as two hex digits
+Finally, if timestamping mode is on, return milliseconds as four hex digits
+Example: t01F80000112233445500
+
+Ascii:
+Microseconds in decimal followed by " - "
+Then, the frame ID in hexadecimal
+Then " X " if extended or " S " if standard frame
+Then, bus number followed by another space
+Then frame length followed by a space
+Then, data bytes in hexadecimal and separated by spaces
+Example: 2346623 - 3DE S 0 8 0 0 11 22 33 44 55 0
+
+Binary:
+Byte 0 - 0xF1
+Byte 1 - 00
+Byte 2-5 - Time stamp in microseconds LSB to MSB
+Byte 6-9 - Frame ID, Bit 31 - Extended Frame
+Byte 10 - Frame length in bottom 4 bits, Bus received on in upper 4 bits
+Byte 11-? - Data bytes
+Byte ?+1 - 0
+
