@@ -733,7 +733,7 @@ void loop()
 
     for (int i = 0; i < MARK_LIMIT; i++)
     {
-        if ((lastMarkTrigger + 500) < millis()) //prevent jitter on switch closing
+        if ((lastMarkTrigger + 100) < millis()) //prevent jitter on switch closing
         {
             if (M2IO.GetButton_12VIO(i + 1)) {
     	        if (!markToggle[i]) {
@@ -1040,37 +1040,30 @@ void loop()
                                 break;
                             }
                         default:{
-                                if(step < build_out_frame.length + 6){
+                                if(step < build_out_frame.length + 6)
+                                {
                                     build_out_frame.data.bytes[step - 6] = in_byte;
-                                } else{
+                                } 
+                                else
+                                {
                                     state = IDLE;
                                     //this would be the checksum byte. Compute and compare.
                                     temp8 = checksumCalc(buff, step);
-                                    //if (temp8 == in_byte){
-                                        /*
-                                        if (settings.singleWireMode == 1){
-                                            if (build_out_frame.id == 0x100){
-                                                if (out_bus == 1){
-                                                    setSWCANWakeup();
-                                                    delay(5);
-                                                    }
-                                            }
-                                        }
-                                    */
+                                    if ((build_out_frame.id == 0x100) && (out_bus == 2))
+                                    {
+                                        SWCAN.mode(1);
+                                        delay(1);
+                                    }                                    
                                     build_out_frame.rtr = 0;
                                     if(out_bus == 0) sendFrame(&Can0, build_out_frame);
                                     if(out_bus == 1) sendFrame(&Can1, build_out_frame);
                                     if(out_bus == 2) sendFrame(&SWCAN, build_out_frame);
-                                    /*
-                                    if (settings.singleWireMode == 1){
-                                        if (build_out_frame.id == 0x100){
-                                            if (out_bus == 1){
-                                                delay(5);
-                                                setSWCANEnabled();
-                                                }
-                                            }
-                                        } */
-                                    //}
+                                    
+                                    if ((build_out_frame.id == 0x100) && (out_bus == 2))
+                                    {
+                                        delay(1);
+                                        SWCAN.mode(3);   
+                                    }
                                 }
                                 break;
                             }
