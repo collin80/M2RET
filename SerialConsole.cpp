@@ -197,7 +197,7 @@ void SerialConsole::handleShortCmd()
     //Lawicel specific commands    
     case 'O': //LAWICEL open canbus port (first one only because LAWICEL has no concept of dual canbus
         Can0.disable_autobaud_listen_mode();
-        Can0.begin(settings.CAN0Speed, 255);
+        Can0.set_baudrate(settings.CAN0Speed);
         Can0.enable();
         SerialUSB.write(13); //send CR to mean "ok"
         SysSettings.lawicelMode = true;
@@ -208,7 +208,7 @@ void SerialConsole::handleShortCmd()
         break;
     case 'L': //LAWICEL open canbus port in listen only mode
         Can0.enable_autobaud_listen_mode();
-        Can0.begin(settings.CAN0Speed, 255);        
+        Can0.set_baudrate(settings.CAN0Speed);
         Can0.enable();
         SerialUSB.write(13); //send CR to mean "ok"
         SysSettings.lawicelMode = true;
@@ -450,10 +450,10 @@ void SerialConsole::handleLawicelCmd()
             //at least two parameters separated by spaces. First BUS ID (CAN0, CAN1, SWCAN, etc) then speed (or more params separated by #'s)
             int speed = atoi(tokens[2]);
             if (!stricmp(tokens[1], "CAN0")) {
-                Can0.begin(speed, 255);
+                Can0.set_baudrate(speed);
             }           
             if (!stricmp(tokens[1], "CAN1")) {
-                Can1.begin(speed, 255);
+                Can1.set_baudrate(speed);
             }
             if (!stricmp(tokens[1], "SWCAN")) {
                 //can't set speed of SWCAN yet
@@ -511,15 +511,21 @@ void SerialConsole::handleConfigCmd()
         if (newValue > 1) newValue = 1;
         Logger::console("Setting CAN0 Enabled to %i", newValue);
         settings.CAN0_Enabled = newValue;
-        if (newValue == 1) Can0.begin(settings.CAN0Speed, 255);
-        else Can0.disable();
+        if (newValue == 1) {
+            Can0.set_baudrate(settings.CAN0Speed);
+            Can0.enable();
+        } else
+            Can0.disable();
         writeEEPROM = true;
     } else if (cmdString == String("CAN1EN")) {
         if (newValue < 0) newValue = 0;
         if (newValue > 1) newValue = 1;
         Logger::console("Setting CAN1 Enabled to %i", newValue);
-        if (newValue == 1) Can1.begin(settings.CAN1Speed, 255);
-        else Can1.disable();
+        if (newValue == 1) {
+            Can1.set_baudrate(settings.CAN1Speed);
+            Can1.enable();
+        } else
+            Can1.disable();
         settings.CAN1_Enabled = newValue;
         writeEEPROM = true;
     } else if (cmdString == String("SWCANEN")) {
@@ -542,14 +548,14 @@ void SerialConsole::handleConfigCmd()
         if (newValue > 0 && newValue <= 1000000) {
             Logger::console("Setting CAN0 Baud Rate to %i", newValue);
             settings.CAN0Speed = newValue;
-            if (settings.CAN0_Enabled) Can0.begin(settings.CAN0Speed, 255);
+            if (settings.CAN0_Enabled) Can0.set_baudrate(settings.CAN1Speed);
             writeEEPROM = true;
         } else Logger::console("Invalid baud rate! Enter a value 1 - 1000000");
     } else if (cmdString == String("CAN1SPEED")) {
         if (newValue > 0 && newValue <= 1000000) {
             Logger::console("Setting CAN1 Baud Rate to %i", newValue);
             settings.CAN1Speed = newValue;
-            if (settings.CAN1_Enabled) Can1.begin(settings.CAN1Speed, 255);
+            if (settings.CAN1_Enabled) Can1.set_baudrate(settings.CAN1Speed);
             writeEEPROM = true;
         } else Logger::console("Invalid baud rate! Enter a value 1 - 1000000");
     } else if (cmdString == String("SWCANSPEED")) {
