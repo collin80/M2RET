@@ -34,6 +34,7 @@
 #include "EEPROM.h"
 #include "config.h"
 #include "sys_io.h"
+#include "rx_queue.h"
 
 extern EEPROMCLASS *eeprom;
 extern SWcan SWCAN;
@@ -68,6 +69,8 @@ void SerialConsole::printMenu()
     SerialUSB.println("R = reset to factory defaults");
     SerialUSB.println("s = Start logging to file");
     SerialUSB.println("S = Stop logging to file");
+    SerialUSB.println("STAT = show CAN receive counts and dropped frames per bus");
+    SerialUSB.println("STATRESET = zero the CAN receive counters");
     SerialUSB.println();
     SerialUSB.println("Config Commands (enter command=newvalue). Current values shown in parenthesis:");
     SerialUSB.println();
@@ -138,6 +141,14 @@ void SerialConsole::printMenu()
  Now the system can handle up to 80 input characters. Commands are submitted
  by sending line ending (LF, CR, or both)
  */
+void SerialConsole::printRxStats()
+{
+    for (int b = 0; b < 2; b++) {
+        Logger::console("CAN%i: received=%i dropped=%i queued=%i peak=%i (queue size %i)", b,
+                        (int)rxQueue[b].received, (int)rxQueue[b].dropped, (int)rxQueueCount(b), (int)rxQueue[b].highWater, RX_QUEUE_SIZE);
+    }
+}
+
 void SerialConsole::rcvCharacter(uint8_t chr)
 {
     if (chr == 10 || chr == 13) { //command done. Parse it.
@@ -159,7 +170,13 @@ void SerialConsole::handleConsoleCmd()
         } else { //at least two bytes
             boolean equalSign = false;
             for (int i = 0; i < ptrBuffer; i++) if (cmdBuffer[i] == '=') equalSign = true;
+            cmdBuffer[ptrBuffer] = 0;
             if (equalSign) handleConfigCmd();
+            else if (!strcmp((char *)cmdBuffer, "STAT")) printRxStats();
+            else if (!strcmp((char *)cmdBuffer, "STATRESET")) {
+                rxQueueResetStats();
+                printRxStats();
+            }
             else handleLawicelCmd(); //single letter lawicel commands handled in handleShortCmd though.
         }
         ptrBuffer = 0; //reset line counter once the line has been processed
@@ -214,11 +231,11 @@ void SerialConsole::handleShortCmd()
         SysSettings.lawicelMode = true;
         break;
     case 'P': //LAWICEL - poll for one waiting frame. Or, just CR if no frames
-        if (Can0.available()) SysSettings.lawicelPollCounter = 1;
+        if (rxQueueCount(0)) SysSettings.lawicelPollCounter = 1;
         else SerialUSB.write(13); //no waiting frames
         break;
     case 'A': //LAWICEL - poll for all waiting frames - CR if no frames
-        SysSettings.lawicelPollCounter = Can0.available();
+        SysSettings.lawicelPollCounter = rxQueueCount(0);
         if (SysSettings.lawicelPollCounter == 0) SerialUSB.write(13);
         break;
     case 'F': //LAWICEL - read status bits

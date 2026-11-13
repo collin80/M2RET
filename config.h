@@ -47,8 +47,15 @@ SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 //The host should be polling every 1ms or so and so this time should be a small multiple of that
 #define SER_BUFF_FLUSH_INTERVAL 2000
 
-#define CFG_BUILD_NUM   345
-#define CFG_VERSION "M2RET Alpha Feb 3 2018"
+//number of frames per CAN bus that can wait between the CAN interrupt and the main loop.
+//Each entry is ~28 bytes, so 512 per bus uses ~28KB of the SAM3X's 96KB RAM.
+#define RX_QUEUE_SIZE       512
+
+//maximum frames taken from the RX queues on each pass of the main loop
+#define RX_DRAIN_PER_LOOP   64
+
+#define CFG_BUILD_NUM   346
+#define CFG_VERSION "M2RET Alpha Feb 3 2018 + ISR RX queue"
 #define EEPROM_ADDR     0x50
 #define EEPROM_VER      0x20
 

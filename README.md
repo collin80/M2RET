@@ -5,6 +5,19 @@ Reverse Engineering Tool running on Macchina M2 Hardware
 
 A fork of the GVRET project.
 
+#### Changes in this fork (branch rx-drain-timestamp, build 346)
+
+Aimed at dropped frames and bunched timestamps when capturing busy 500k buses with SavvyCAN.
+
+- Received CAN0/CAN1 frames are copied into a 512-frame queue per bus from the CAN interrupt
+  (`rx_queue.cpp`) and timestamped with `micros()` at that moment, not when they are sent to USB.
+- The main loop drains up to 64 frames per pass (previously one frame per bus per pass), oldest
+  first across both buses so the combined log stays in time order.
+- The USB buffer is flushed when it is half full as well as every 2 ms, so it can no longer overflow.
+- Console commands `STAT` (frames received, dropped, peak queue depth per bus) and `STATRESET`.
+  A non-zero `dropped` count means the queue filled because USB or the SD card could not keep up.
+- Queue size and drain limit are `RX_QUEUE_SIZE` and `RX_DRAIN_PER_LOOP` in `config.h`.
+
 #### Requirements:
 
 You will need the following to be able to compile the run this project:

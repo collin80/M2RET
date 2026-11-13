@@ -44,6 +44,7 @@ SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
 #include "EEPROM.h"
 #include "SerialConsole.h"
+#include "rx_queue.h"
 
 #ifdef _M2IO
     #include "M2RET.h"
@@ -70,6 +71,15 @@ typedef struct {
 byte serialBuffer[SER_BUFF_SIZE];
 int serialBufferLength = 0; //not creating a ring buffer. The buffer should be large enough to never overflow
 uint32_t lastFlushMicros = 0;
+
+void flushSerialBuffer()
+{
+    if (serialBufferLength > 0) {
+        SerialUSB.write(serialBuffer, serialBufferLength);
+        serialBufferLength = 0;
+    }
+    lastFlushMicros = micros();
+}
 BUSLOAD busLoad[2];
 uint32_t busLoadTimer;
 bool markToggle[6];
@@ -310,6 +320,11 @@ void setup()
     }
 
 
+    //Received frames go from the CAN interrupt straight into rxQueue[] (see rx_queue.cpp).
+    //Registered regardless of whether the bus is enabled, so it also applies when SavvyCAN enables a bus later.
+    Can0.setGeneralCallback(rxCan0ISR);
+    Can1.setGeneralCallback(rxCan1ISR);
+
     if (settings.CAN0_Enabled) {
         if (settings.CAN0ListenOnly) {
             Can0.setListenOnlyMode(true);
@@ -498,13 +513,17 @@ void updateBusloadLED(uint8_t perc)
 
 void sendFrameToUSB(CAN_FRAME &frame, int whichBus)
 {
+    sendFrameToUSB(frame, whichBus, micros());
+}
+
+void sendFrameToUSB(CAN_FRAME &frame, int whichBus, uint32_t now)
+{
     uint8_t buff[22];
     uint8_t temp;
-    uint32_t now = micros();
 
     if (SysSettings.lawicelMode) {
         if (SysSettings.lawicellExtendedMode) {
-            SerialUSB.print(micros());
+            SerialUSB.print(now);
             SerialUSB.print(" - ");
             SerialUSB.print(frame.id, HEX);            
             if (frame.extended) SerialUSB.print(" X ");
@@ -530,7 +549,7 @@ void sendFrameToUSB(CAN_FRAME &frame, int whichBus)
                 SerialUSB.print((char *)buff);
             }
             if (SysSettings.lawicelTimestamping) {
-                uint16_t timestamp = (uint16_t)millis();
+                uint16_t timestamp = (uint16_t)(now / 1000);
                 sprintf((char *)buff, "%04x", timestamp);
                 SerialUSB.print((char *)buff);
             }
@@ -538,6 +557,7 @@ void sendFrameToUSB(CAN_FRAME &frame, int whichBus)
         SerialUSB.write(13);
     } else {
         if (settings.useBinarySerialComm) {
+            if (serialBufferLength > SER_BUFF_SIZE - 32) flushSerialBuffer(); //never overflow the buffer
             if (frame.extended) frame.id |= 1 << 31;
             serialBuffer[serialBufferLength++] = 0xF1;
             serialBuffer[serialBufferLength++] = 0; //0 = canbus frame sending
@@ -558,7 +578,7 @@ void sendFrameToUSB(CAN_FRAME &frame, int whichBus)
             serialBuffer[serialBufferLength++] = temp;
             //SerialUSB.write(buff, 12 + frame.length);
         } else {
-            SerialUSB.print(micros());
+            SerialUSB.print(now);
             SerialUSB.print(" - ");
             SerialUSB.print(frame.id, HEX);
             if (frame.extended) SerialUSB.print(" X ");
@@ -577,12 +597,17 @@ void sendFrameToUSB(CAN_FRAME &frame, int whichBus)
 
 void sendFrameToFile(CAN_FRAME &frame, int whichBus)
 {
+    sendFrameToFile(frame, whichBus, micros());
+}
+
+void sendFrameToFile(CAN_FRAME &frame, int whichBus, uint32_t now)
+{
     uint8_t buff[40];
     //uint8_t temp;
     uint32_t timestamp;
     if (settings.fileOutputType == BINARYFILE) {
         if (frame.extended) frame.id |= 1 << 31;
-        timestamp = micros();
+        timestamp = now;
         buff[0] = (uint8_t)(timestamp & 0xFF);
         buff[1] = (uint8_t)(timestamp >> 8);
         buff[2] = (uint8_t)(timestamp >> 16);
@@ -597,7 +622,7 @@ void sendFrameToFile(CAN_FRAME &frame, int whichBus)
         }
         Logger::fileRaw(buff, 9 + frame.length);
     } else if (settings.fileOutputType == GVRET) {
-        sprintf((char *)buff, "%i,%x,%i,%i,%i", millis(), frame.id, frame.extended, whichBus, frame.length);
+        sprintf((char *)buff, "%i,%x,%i,%i,%i", now / 1000, frame.id, frame.extended, whichBus, frame.length);
         Logger::fileRaw(buff, strlen((char *)buff));
 
         for (int c = 0; c < frame.length; c++) {
@@ -610,7 +635,7 @@ void sendFrameToFile(CAN_FRAME &frame, int whichBus)
     } else if (settings.fileOutputType == CRTD) {
         int idBits = 11;
         if (frame.extended) idBits = 29;
-        sprintf((char *)buff, "%f R%i %x", millis() / 1000.0f, idBits, frame.id);
+        sprintf((char *)buff, "%f R%i %x", now / 1000000.0f, idBits, frame.id);
         Logger::fileRaw(buff, strlen((char *)buff));
 
         for (int c = 0; c < frame.length; c++) {
@@ -759,24 +784,19 @@ void loop()
 
     //if (!SysSettings.lawicelMode || SysSettings.lawicelAutoPoll || SysSettings.lawicelPollCounter > 0)
     //{
-    if (Can0.available() > 0) {
-        Can0.read(incoming);
-        addBits(0, incoming);
+    //Drain both CAN RX queues (filled by the CAN interrupt), oldest frame first so the two buses stay in time order.
+    for (int drained = 0; drained < RX_DRAIN_PER_LOOP; drained++) {
+        uint32_t stamp;
+        int bus = rxQueuePopOldest(incoming, stamp);
+        if (bus < 0) break;
+        addBits(bus, incoming);
         toggleRXLED();
-        if (isConnected) sendFrameToUSB(incoming, 0);
-        if (SysSettings.logToFile) sendFrameToFile(incoming, 0);
-        if (digToggleSettings.enabled && (digToggleSettings.mode & 1) && (digToggleSettings.mode & 2)) processDigToggleFrame(incoming);
+        //dig toggle before sending, because sending sets bit 31 of extended ids
+        if (digToggleSettings.enabled && (digToggleSettings.mode & 1) && (digToggleSettings.mode & (bus == 0 ? 2 : 4))) processDigToggleFrame(incoming);
+        if (isConnected) sendFrameToUSB(incoming, bus, stamp);
+        if (SysSettings.logToFile) sendFrameToFile(incoming, bus, stamp);
     }
 
-    if (Can1.available() > 0) {
-        Can1.read(incoming);
-        addBits(1, incoming);
-        toggleRXLED();
-        if (isConnected) sendFrameToUSB(incoming, 1);
-        if (digToggleSettings.enabled && (digToggleSettings.mode & 1) && (digToggleSettings.mode & 4)) processDigToggleFrame(incoming);
-        if (SysSettings.logToFile) sendFrameToFile(incoming, 1);
-    }
-    
     if (SWCAN.GetRXFrame(incoming)) {
         toggleRXLED();
         if (isConnected) sendFrameToUSB(incoming, 2);
@@ -810,12 +830,8 @@ void loop()
 
     //delay(100);
 
-    if (micros() - lastFlushMicros > SER_BUFF_FLUSH_INTERVAL) {
-        if (serialBufferLength > 0) {
-            SerialUSB.write(serialBuffer, serialBufferLength);
-            serialBufferLength = 0;
-            lastFlushMicros = micros();
-        }
+    if ((micros() - lastFlushMicros > SER_BUFF_FLUSH_INTERVAL) || (serialBufferLength > SER_BUFF_SIZE / 2)) {
+        flushSerialBuffer();
     }
 
     serialCnt = 0;

@@ -36,6 +36,7 @@ class SerialConsole {
 public:
     SerialConsole();
     void printMenu();
+    void printRxStats();
     void rcvCharacter(uint8_t chr);
     void printBusName(int bus);
 
